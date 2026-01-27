@@ -1,0 +1,31 @@
+{
+  "project_info": {
+    "project_number": "53191143209",
+    "project_id": "spyware-7bfe6",
+    "storage_bucket": "spyware-7bfe6.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:53191143209:android:a3fc3e05127bf21dbed138",
+        "android_client_info": {
+          "package_name": "com.ghiz.bookscanner"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB7705NKp5q2WYu27elxahSTy_0SDoD6v4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
+
+
