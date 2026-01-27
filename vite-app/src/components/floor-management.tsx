@@ -5,6 +5,8 @@
 
 import { useState } from 'react'
 import { useFloors, useSaveFloor, useUpdateFloor } from '@/hooks/useFirestore'
+import { StorageService } from '@/services/storage.service'
+import { FileUpload } from '@/components/file-upload'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,16 +29,17 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Building2, Plus, Edit, Layers, Loader2, MapPin } from 'lucide-react'
+import { Building2, Plus, Edit, Layers, Loader2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import type { Floor, CreateFloorInput } from '@/types'
 
 interface FloorManagementProps {
   libraryId: string
   libraryName: string
+  onFloorSelect?: (floorId: string) => void
 }
 
-export function FloorManagement({ libraryId, libraryName }: FloorManagementProps) {
+export function FloorManagement({ libraryId, libraryName, onFloorSelect }: FloorManagementProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingFloor, setEditingFloor] = useState<Floor | null>(null)
 
@@ -48,6 +51,8 @@ export function FloorManagement({ libraryId, libraryName }: FloorManagementProps
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<CreateFloorInput>()
 
@@ -203,13 +208,25 @@ export function FloorManagement({ libraryId, libraryName }: FloorManagementProps
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(floor)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
+                      <div className="flex gap-2">
+                        {onFloorSelect && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => onFloorSelect(floor.id)}
+                            className="bg-[#38ada9] hover:bg-[#2d8a86]"
+                          >
+                            عرض الرفوف
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(floor)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -296,7 +313,20 @@ export function FloorManagement({ libraryId, libraryName }: FloorManagementProps
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="mapUrl">رابط الخريطة</Label>
+                <Label>خريطة الطابق</Label>
+                <FileUpload
+                  accept="image/*"
+                  maxSize={5}
+                  currentUrl={watch('mapUrl')}
+                  onUpload={async (file) => {
+                    const floorId = editingFloor?.id || `floor_${Date.now()}`
+                    const url = await StorageService.uploadFloorMap(file, libraryId, floorId)
+                    setValue('mapUrl', url)
+                    return url
+                  }}
+                  onUrlChange={(url) => setValue('mapUrl', url || undefined)}
+                />
+                <p className="text-xs text-gray-500">أو أدخل رابط الخريطة يدوياً</p>
                 <Input
                   id="mapUrl"
                   type="url"

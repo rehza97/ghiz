@@ -114,7 +114,11 @@ list_users() {
 show_project_info() {
     echo -e "${GREEN}📋 Firebase Project Information${NC}"
     echo "======================================"
-    echo "Current Project: $(firebase use 2>&1 | grep -oP '(?<=\* ).*' || echo 'Not set')"
+    CURRENT_PROJECT=$(firebase use 2>&1 | grep -E '^\s+\*' | sed 's/.*\* //' | head -n1)
+    if [ -z "$CURRENT_PROJECT" ]; then
+        CURRENT_PROJECT="Not set"
+    fi
+    echo "Current Project: $CURRENT_PROJECT"
     echo ""
     echo "Available Projects:"
     firebase projects:list

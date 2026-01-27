@@ -63,6 +63,8 @@ try {
 }
 
 const auth = admin.auth()
+// Use default Firestore database for admin_users collection
+// The "book" database is for book-related data, admin_users should be in default
 const firestore = admin.firestore()
 
 async function createAdminUser() {
@@ -115,8 +117,36 @@ async function createAdminUser() {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }
 
-    await firestore.collection('admin_users').doc(userRecord.uid).set(adminUserData, { merge: true })
-    console.log('✅ Admin user document created in Firestore')
+    // Create admin user document in Firestore
+    // Try default database first, then "book" database if default doesn't exist
+    let documentCreated = false
+    
+    try {
+      // Try default database first
+      await firestore.collection('admin_users').doc(userRecord.uid).set(adminUserData, { merge: true })
+      console.log('✅ Admin user document created in Firestore (default database)')
+      documentCreated = true
+    } catch (firestoreError) {
+      // If default database fails (NOT_FOUND), the default DB might not exist
+      // Try creating in "book" database instead (using database ID)
+      if (firestoreError.code === 5 || firestoreError.message?.includes('NOT_FOUND')) {
+        try {
+          console.log('⚠️  Default database not accessible, trying "book" database...')
+          // For named databases in Admin SDK v11+, use database() method
+          const bookDb = admin.firestore().database('book')
+          await bookDb.collection('admin_users').doc(userRecord.uid).set(adminUserData, { merge: true })
+          console.log('✅ Admin user document created in Firestore (book database)')
+          documentCreated = true
+        } catch (bookDbError) {
+          console.warn('⚠️  Warning: Could not create Firestore document in any database')
+          console.warn('   Error:', bookDbError.message)
+          console.warn('   The user is created in Firebase Auth with custom claims and can login.')
+          console.warn('   You may need to create the admin_users collection manually in Firestore Console.')
+        }
+      } else {
+        throw firestoreError
+      }
+    }
 
     console.log('\n✅ Admin user created successfully!')
     console.log('\n📝 Login Credentials:')

@@ -7,7 +7,7 @@ interface QRCodeProps {
   level?: 'L' | 'M' | 'Q' | 'H'
 }
 
-export function QRCode({ value, size = 200 }: QRCodeProps) {
+export function QRCode({ value }: QRCodeProps) {
   // Simple QR code placeholder - in production, use a proper QR code library
   // This is a visual placeholder that can be replaced with react-qr-code
   return (

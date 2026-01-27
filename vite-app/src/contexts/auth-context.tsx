@@ -3,24 +3,25 @@
  * Manages authentication state and provides auth methods
  */
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
-  User as FirebaseUser,
+  type User as FirebaseUser,
 } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore'
 import { auth, firestore } from '@/lib/firebase'
 
 interface AdminUser {
-  uid: string
+  uid?: string
+  id?: string
   email: string
   displayName?: string
   role: 'admin' | 'super_admin' | 'librarian'
   libraryId?: string
   isActive: boolean
-  createdAt: string
+  createdAt?: string
 }
 
 interface AuthContextType {

@@ -6,14 +6,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { FirestoreService } from '@/services/firestore.service'
 import type {
-  Library,
-  Floor,
-  Shelf,
-  Book,
   BookLocation,
   Scan,
   Correction,
-  Analytics,
   SystemConfig,
   CreateLibraryInput,
   CreateFloorInput,
@@ -388,6 +383,23 @@ export function useAnalyticsForDate(date: string) {
     queryKey: ['analytics', date],
     queryFn: () => FirestoreService.Analytics.getAnalyticsForDate(date),
     enabled: !!date,
+  })
+}
+
+// ==================== Admin Users ====================
+
+export function useAdminUsers() {
+  return useQuery({
+    queryKey: ['adminUsers'],
+    queryFn: () => FirestoreService.AdminUser.getAdminUsers(),
+  })
+}
+
+export function useAdminUser(uid: string) {
+  return useQuery({
+    queryKey: ['adminUser', uid],
+    queryFn: () => FirestoreService.AdminUser.getAdminUserById(uid),
+    enabled: !!uid,
   })
 }
 

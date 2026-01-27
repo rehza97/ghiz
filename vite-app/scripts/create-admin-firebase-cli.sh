@@ -18,11 +18,19 @@ if ! command -v firebase &> /dev/null; then
     exit 1
 fi
 
-# Parse arguments
+# Parse arguments - handle quoted display name properly
 EMAIL=$1
 PASSWORD=$2
 ROLE=${3:-admin}
-DISPLAY_NAME=${4:-"Admin User"}
+
+# Handle display name - could be multiple words in quotes
+if [ $# -ge 4 ]; then
+    # Shift to get all remaining arguments as display name
+    shift 3
+    DISPLAY_NAME="$*"
+else
+    DISPLAY_NAME="Admin User"
+fi
 
 # Validate arguments
 if [ -z "$EMAIL" ] || [ -z "$PASSWORD" ]; then
@@ -46,8 +54,16 @@ if ! firebase projects:list &> /dev/null; then
     firebase login
 fi
 
-# Get current project
-PROJECT_ID=$(firebase use 2>&1 | grep -oP '(?<=\* ).*' || echo "spyware-7bfe6")
+# Get current project (macOS compatible)
+# Try to extract project from "Now using project X" or "* X" format
+USE_OUTPUT=$(firebase use 2>&1)
+if echo "$USE_OUTPUT" | grep -q "Now using project"; then
+    PROJECT_ID=$(echo "$USE_OUTPUT" | grep -oE "Now using project [^ ]+" | awk '{print $4}')
+elif echo "$USE_OUTPUT" | grep -qE "^\s+\*"; then
+    PROJECT_ID=$(echo "$USE_OUTPUT" | grep -E "^\s+\*" | head -n1 | sed -E 's/.*\* ([^ ]+).*/\1/')
+else
+    PROJECT_ID="spyware-7bfe6"
+fi
 echo -e "${GREEN}✅ Using Firebase project: ${PROJECT_ID}${NC}"
 echo ""
 

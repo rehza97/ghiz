@@ -1,8 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '@/contexts/auth-context'
 import { FirebaseStatus } from '@/components/firebase-status'
 import { LibraryManagement } from '@/components/library-management'
 import { BooksManagement } from '@/components/books-management'
+import { FloorManagement } from '@/components/floor-management'
+import { ShelfManagement } from '@/components/shelf-management'
+import { AnalyticsDashboard } from '@/components/analytics-dashboard'
+import { UserManagement } from '@/components/user-management'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -21,27 +26,66 @@ import {
   CheckCircle2,
   Clock,
   Loader2,
+  Building2,
+  Layers,
 } from 'lucide-react'
-import { useLibraries, useBooks, useRecentScans } from '@/hooks/useFirestore'
+import { useLibraries, useBooks, useRecentScans, useFloors } from '@/hooks/useFirestore'
+import { Label } from '@/components/ui/label'
 
-type TabType = 'overview' | 'libraries' | 'books' | 'users' | 'analytics' | 'settings'
+type TabType = 'overview' | 'libraries' | 'books' | 'floors' | 'shelves' | 'users' | 'analytics' | 'settings'
+
+// Wrapper component to use hooks conditionally
+function ShelfManagementWrapper({ libraryId, floorId, onBack }: { libraryId: string; floorId: string; onBack: () => void }) {
+  const { data: floors } = useFloors(libraryId)
+  const floor = floors?.find(f => f.id === floorId)
+  
+  return (
+    <>
+      <ShelfManagement
+        libraryId={libraryId}
+        floorId={floorId}
+        floorName={floor?.name || `الطابق ${floorId}`}
+      />
+      <Button
+        variant="outline"
+        onClick={onBack}
+        className="mt-4"
+      >
+        ← العودة إلى قائمة الطوابق
+      </Button>
+    </>
+  )
+}
 
 export function AdminDashboard() {
   const navigate = useNavigate()
+  const { currentUser, adminUser, signOut } = useAuth()
   const [activeTab, setActiveTab] = useState<TabType>('overview')
+  const [selectedLibrary, setSelectedLibrary] = useState<string | null>(null)
+  const [selectedFloor, setSelectedFloor] = useState<string | null>(null)
 
   // Fetch data for overview
   const { data: libraries, isLoading: librariesLoading } = useLibraries()
   const { data: books, isLoading: booksLoading } = useBooks()
   const { data: recentScans, isLoading: scansLoading } = useRecentScans(
-    libraries?.[0]?.id || '',
+    selectedLibrary || libraries?.[0]?.id || '',
     10
   )
 
-  const handleLogout = () => {
-    // Add logout logic here
-    navigate('/login')
+  const handleLogout = async () => {
+    try {
+      await signOut()
+      navigate('/login')
+    } catch (error) {
+      console.error('Logout error:', error)
+      // Still navigate even if logout fails
+      navigate('/login')
+    }
   }
+
+  // Get display name or email
+  const displayName = adminUser?.displayName || currentUser?.displayName || currentUser?.email || 'مدير النظام'
+  const displayEmail = currentUser?.email || 'admin@example.com'
 
   // Calculate statistics
   const totalLibraries = libraries?.length || 0
@@ -73,8 +117,13 @@ export function AdminDashboard() {
             </div>
             <div className="flex items-center gap-3">
               <div className="text-right hidden md:block">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">مدير النظام</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">admin@example.com</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">{displayName}</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400">{displayEmail}</p>
+                {adminUser?.role && (
+                  <p className="text-xs text-[#38ada9] font-medium">
+                    {adminUser.role === 'super_admin' ? 'مدير عام' : adminUser.role === 'admin' ? 'مدير' : 'أمين مكتبة'}
+                  </p>
+                )}
               </div>
               <Button
                 variant="outline"
@@ -124,13 +173,31 @@ export function AdminDashboard() {
                   الكتب
                 </Button>
                 <Button
-                  variant={activeTab === 'users' ? 'default' : 'ghost'}
+                  variant={activeTab === 'floors' ? 'default' : 'ghost'}
                   className="w-full justify-start h-10"
-                  onClick={() => setActiveTab('users')}
+                  onClick={() => setActiveTab('floors')}
                 >
-                  <Users className="h-4 w-4 ml-2" />
-                  المستخدمون
+                  <Layers className="h-4 w-4 ml-2" />
+                  الطوابق
                 </Button>
+                <Button
+                  variant={activeTab === 'shelves' ? 'default' : 'ghost'}
+                  className="w-full justify-start h-10"
+                  onClick={() => setActiveTab('shelves')}
+                >
+                  <Building2 className="h-4 w-4 ml-2" />
+                  الرفوف
+                </Button>
+                {adminUser?.role === 'super_admin' && (
+                  <Button
+                    variant={activeTab === 'users' ? 'default' : 'ghost'}
+                    className="w-full justify-start h-10"
+                    onClick={() => setActiveTab('users')}
+                  >
+                    <Users className="h-4 w-4 ml-2" />
+                    المستخدمون
+                  </Button>
+                )}
                 <Button
                   variant={activeTab === 'analytics' ? 'default' : 'ghost'}
                   className="w-full justify-start h-10"
@@ -310,34 +377,127 @@ export function AdminDashboard() {
             {/* Books Tab */}
             {activeTab === 'books' && <BooksManagement />}
 
+            {/* Floors Tab */}
+            {activeTab === 'floors' && (
+              <div className="space-y-4">
+                {!selectedLibrary && libraries && libraries.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>اختر مكتبة</CardTitle>
+                      <CardDescription>اختر مكتبة لعرض وإدارة طوابقها</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {libraries.map((lib) => (
+                          <Button
+                            key={lib.id}
+                            variant={selectedLibrary === lib.id ? 'default' : 'outline'}
+                            onClick={() => setSelectedLibrary(lib.id)}
+                            className="justify-start h-auto py-3"
+                          >
+                            <Library className="h-4 w-4 ml-2" />
+                            <div className="text-right flex-1">
+                              <p className="font-medium">{lib.name}</p>
+                              <p className="text-xs text-gray-500">{lib.city}</p>
+                            </div>
+                          </Button>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                {selectedLibrary && libraries && (
+                  <FloorManagement
+                    libraryId={selectedLibrary}
+                    libraryName={libraries.find(l => l.id === selectedLibrary)?.name || 'المكتبة'}
+                  />
+                )}
+                {selectedLibrary && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedLibrary(null)
+                      setSelectedFloor(null)
+                    }}
+                  >
+                    ← العودة إلى قائمة المكتبات
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* Shelves Tab */}
+            {activeTab === 'shelves' && (
+              <div className="space-y-4">
+                {!selectedLibrary && libraries && libraries.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>اختر مكتبة وطابق</CardTitle>
+                      <CardDescription>اختر مكتبة وطابق لعرض وإدارة رفوفه</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div>
+                          <Label className="mb-2 block">اختر المكتبة</Label>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {libraries.map((lib) => (
+                              <Button
+                                key={lib.id}
+                                variant={selectedLibrary === lib.id ? 'default' : 'outline'}
+                                onClick={() => {
+                                  setSelectedLibrary(lib.id)
+                                  setSelectedFloor(null)
+                                }}
+                                className="justify-start h-auto py-3"
+                              >
+                                <Library className="h-4 w-4 ml-2" />
+                                <div className="text-right flex-1">
+                                  <p className="font-medium">{lib.name}</p>
+                                  <p className="text-xs text-gray-500">{lib.city}</p>
+                                </div>
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                {selectedLibrary && !selectedFloor && (
+                  <FloorManagement
+                    libraryId={selectedLibrary}
+                    libraryName={libraries?.find(l => l.id === selectedLibrary)?.name || 'المكتبة'}
+                    onFloorSelect={setSelectedFloor}
+                  />
+                )}
+                {selectedLibrary && selectedFloor && (
+                  <>
+                    <ShelfManagementWrapper
+                      libraryId={selectedLibrary}
+                      floorId={selectedFloor}
+                      onBack={() => setSelectedFloor(null)}
+                    />
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Users Tab */}
-            {activeTab === 'users' && (
+            {activeTab === 'users' && adminUser?.role === 'super_admin' ? (
+              <UserManagement />
+            ) : activeTab === 'users' ? (
               <Card>
-                <CardHeader>
-                  <CardTitle>إدارة المستخدمين</CardTitle>
-                  <CardDescription>قريباً...</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    ستتوفر ميزة إدارة المستخدمين قريباً
-                  </p>
+                <CardContent className="p-8">
+                  <div className="text-center text-red-600">
+                    ليس لديك صلاحيات الوصول إلى إدارة المستخدمين
+                  </div>
                 </CardContent>
               </Card>
-            )}
+            ) : null}
 
             {/* Analytics Tab */}
             {activeTab === 'analytics' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>التحليلات والإحصائيات</CardTitle>
-                  <CardDescription>قريباً...</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    ستتوفر ميزة التحليلات قريباً
-                  </p>
-                </CardContent>
-              </Card>
+              <AnalyticsDashboard libraryId={selectedLibrary || undefined} />
             )}
 
             {/* Settings Tab */}

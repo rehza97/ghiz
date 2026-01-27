@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react'
-import { useShelves, useSaveShelf, useUpdateShelf, useShelfBooks } from '@/hooks/useFirestore'
+import { useShelves, useSaveShelf, useUpdateShelf, useShelfBooks, useBook } from '@/hooks/useFirestore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,7 +30,44 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { BookOpen, Plus, Edit, Loader2, Box } from 'lucide-react'
 import { useForm } from 'react-hook-form'
-import type { Shelf, CreateShelfInput } from '@/types'
+import type { Shelf, CreateShelfInput, ShelfBook } from '@/types'
+
+// Component to display a shelf book with book details
+function ShelfBookItem({ shelfBook }: { shelfBook: ShelfBook }) {
+  const { data: book, isLoading } = useBook(shelfBook.bookIsbn)
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-5 w-5 animate-spin text-[#38ada9]" />
+            <span className="text-sm text-gray-600">جاري التحميل...</span>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <BookOpen className="h-5 w-5 text-[#38ada9]" />
+            <div>
+              <p className="font-medium">{book?.title || 'غير معروف'}</p>
+              <p className="text-sm text-gray-600">
+                ISBN: {shelfBook.bookIsbn}
+              </p>
+            </div>
+          </div>
+          <Badge>الموقع: {shelfBook.position}</Badge>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
 
 interface ShelfManagementProps {
   libraryId: string
@@ -80,7 +117,6 @@ export function ShelfManagement({ libraryId, floorId, floorName }: ShelfManageme
             libraryId,
             floorId,
             currentCount: 0,
-            accuracy: 100,
             isActive: true,
           },
         })
@@ -267,23 +303,8 @@ export function ShelfManagement({ libraryId, floorId, floorName }: ShelfManageme
                       </p>
                     ) : (
                       <div className="grid gap-2">
-                        {shelfBooks.map((book) => (
-                          <Card key={book.id}>
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <BookOpen className="h-5 w-5 text-[#38ada9]" />
-                                  <div>
-                                    <p className="font-medium">{book.title}</p>
-                                    <p className="text-sm text-gray-600">
-                                      ISBN: {book.isbn}
-                                    </p>
-                                  </div>
-                                </div>
-                                <Badge>الموقع: {book.position}</Badge>
-                              </div>
-                            </CardContent>
-                          </Card>
+                        {shelfBooks.map((shelfBook) => (
+                          <ShelfBookItem key={shelfBook.bookIsbn} shelfBook={shelfBook} />
                         ))}
                       </div>
                     )}

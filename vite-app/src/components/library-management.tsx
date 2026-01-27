@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { useLibraries, useSaveLibrary, useDeleteLibrary } from '@/hooks/useFirestore'
+import { useLibraries, useSaveLibrary, useUpdateLibrary, useDeleteLibrary } from '@/hooks/useFirestore'
+import { StorageService } from '@/services/storage.service'
+import { FileUpload } from '@/components/file-upload'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -25,6 +27,7 @@ export function LibraryManagement() {
 
   const { data: libraries, isLoading, error } = useLibraries()
   const saveLibrary = useSaveLibrary()
+  const updateLibrary = useUpdateLibrary()
   const deleteLibrary = useDeleteLibrary()
 
   const [formData, setFormData] = useState<CreateLibraryInput>({
@@ -32,9 +35,11 @@ export function LibraryManagement() {
     address: '',
     postalCode: '',
     city: '',
+    wilaya: '',
     floorCount: 1,
     latitude: 0,
     longitude: 0,
+    isActive: true,
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,7 +48,13 @@ export function LibraryManagement() {
     const libraryId = editingLibrary || `lib_${Date.now()}`
 
     try {
-      await saveLibrary.mutateAsync({ libraryId, data: formData })
+      if (editingLibrary) {
+        // Update existing library
+        await updateLibrary.mutateAsync({ libraryId, data: formData })
+      } else {
+        // Create new library
+        await saveLibrary.mutateAsync({ libraryId, data: formData })
+      }
       setShowAddForm(false)
       setEditingLibrary(null)
       setFormData({
@@ -51,9 +62,11 @@ export function LibraryManagement() {
         address: '',
         postalCode: '',
         city: '',
+        wilaya: '',
         floorCount: 1,
         latitude: 0,
         longitude: 0,
+        isActive: true,
       })
     } catch (error) {
       console.error('Error saving library:', error)
@@ -128,7 +141,17 @@ export function LibraryManagement() {
                   <Input
                     id="city"
                     value={formData.city}
-                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, city: e.target.value, wilaya: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="wilaya">الولاية *</Label>
+                  <Input
+                    id="wilaya"
+                    value={formData.wilaya}
+                    onChange={(e) => setFormData({ ...formData, wilaya: e.target.value })}
                     required
                   />
                 </div>
@@ -226,23 +249,41 @@ export function LibraryManagement() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="description">الوصف</Label>
-                <textarea
-                  id="description"
-                  className="w-full min-h-[100px] px-3 py-2 border border-gray-300 rounded-md"
-                  value={formData.description || ''}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                />
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">الوصف</Label>
+                  <textarea
+                    id="description"
+                    className="w-full min-h-[100px] px-3 py-2 border border-gray-300 rounded-md"
+                    value={formData.description || ''}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>شعار المكتبة</Label>
+                  <FileUpload
+                    accept="image/*"
+                    maxSize={2}
+                    currentUrl={formData.logoUrl}
+                    onUpload={async (file) => {
+                      const libraryId = editingLibrary || `lib_${Date.now()}`
+                      const url = await StorageService.uploadLibraryLogo(file, libraryId)
+                      setFormData({ ...formData, logoUrl: url })
+                      return url
+                    }}
+                    onUrlChange={(url) => setFormData({ ...formData, logoUrl: url || undefined })}
+                  />
+                </div>
 
               <div className="flex gap-2">
-                <Button type="submit" disabled={saveLibrary.isPending}>
-                  {saveLibrary.isPending ? (
+                <Button type="submit" disabled={saveLibrary.isPending || updateLibrary.isPending}>
+                  {(saveLibrary.isPending || updateLibrary.isPending) ? (
                     <>
                       <Loader2 className="h-4 w-4 ml-2 animate-spin" />
                       جاري الحفظ...
                     </>
+                  ) : editingLibrary ? (
+                    'تحديث'
                   ) : (
                     'حفظ'
                   )}
@@ -357,6 +398,7 @@ export function LibraryManagement() {
                         address: library.address,
                         postalCode: library.postalCode,
                         city: library.city,
+                        wilaya: library.wilaya,
                         phone: library.phone,
                         email: library.email,
                         floorCount: library.floorCount,
@@ -365,6 +407,7 @@ export function LibraryManagement() {
                         hours: library.hours,
                         description: library.description,
                         logoUrl: library.logoUrl,
+                        isActive: library.isActive,
                       })
                       setShowAddForm(true)
                     }}

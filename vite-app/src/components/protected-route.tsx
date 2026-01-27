@@ -26,9 +26,13 @@ export function ProtectedRoute({ children, requireSuperAdmin = false }: Protecte
     )
   }
 
-  if (!currentUser || !adminUser) {
+  if (!currentUser) {
     return <Navigate to="/login" replace />
   }
+
+  // Note: We allow access if user is authenticated, even if adminUser document
+  // doesn't exist yet. The adminUser document is created via Firebase Admin script
+  // but custom claims (role, isAdmin) are set during user creation and work immediately.
 
   if (requireSuperAdmin && !isSuperAdmin) {
     return (

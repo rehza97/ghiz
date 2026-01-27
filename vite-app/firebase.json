@@ -1,5 +1,7 @@
 {
   "firestore": {
+    "database": "book",
+    "location": "eur3",
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
@@ -51,7 +53,15 @@
       "enabled": true,
       "port": 4000
     },
-    "singleProjectMode": true
+    "singleProjectMode": true,
+    "functions": {
+      "port": 5001
+    },
+    "hosting": {
+      "port": 5000
+    }
+  },
+  "database": {
+    "rules": "database.rules.json"
   }
 }
-

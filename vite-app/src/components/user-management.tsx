@@ -4,6 +4,7 @@
  */
 
 import { useState } from 'react'
+import { useAdminUsers } from '@/hooks/useFirestore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,21 +38,22 @@ import { useForm } from 'react-hook-form'
 import { useAuth } from '@/contexts/auth-context'
 
 interface AdminUser {
-  uid: string
+  uid?: string
+  id?: string
   email: string
   displayName?: string
   role: 'admin' | 'super_admin' | 'librarian'
   libraryId?: string
   isActive: boolean
-  createdAt: string
+  createdAt?: string
 }
 
 export function UserManagement() {
   const { isSuperAdmin } = useAuth()
+  const { data: users, isLoading: usersLoading } = useAdminUsers()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
-  const [users, setUsers] = useState<AdminUser[]>([])
-  const [isLoading, setIsLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   const {
     register,
@@ -72,16 +74,16 @@ export function UserManagement() {
 
   const onSubmit = async (data: any) => {
     try {
-      setIsLoading(true)
+      setIsSaving(true)
       
-      // In a real implementation, this would call Firebase Admin API
-      // to create/update the user
-      console.log('Creating/updating user:', data)
+      // User creation/update must be done via Firebase Admin SDK
+      // Show instructions to use the CLI script
+      const command = `npm run create-admin:cli "${data.email}" "${data.password || 'Password123!'}" ${data.role} "${data.displayName || 'User'}"`
       
-      // For demo purposes, just show a message
       alert(
-        'لإنشاء مستخدم جديد، يرجى استخدام سكريبت Firebase Admin:\n\n' +
-        `npm run create-admin ${data.email} ${data.password || 'password'} ${data.role} "${data.displayName}"`
+        'لإنشاء أو تحديث مستخدم، يرجى استخدام سكريبت Firebase Admin:\n\n' +
+        command +
+        '\n\nسيتم إنشاء المستخدم في Firebase Auth وإنشاء وثيقة في Firestore.'
       )
       
       setIsDialogOpen(false)
@@ -89,8 +91,9 @@ export function UserManagement() {
       reset()
     } catch (error) {
       console.error('Error saving user:', error)
+      alert('حدث خطأ: ' + (error as Error).message)
     } finally {
-      setIsLoading(false)
+      setIsSaving(false)
     }
   }
 
@@ -181,15 +184,20 @@ export function UserManagement() {
           </div>
         </CardHeader>
         <CardContent>
-          {users.length === 0 ? (
+          {usersLoading ? (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin text-[#38ada9]" />
+              <span className="mr-3 text-gray-600">جاري تحميل المستخدمين...</span>
+            </div>
+          ) : !users || users.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <Users className="h-12 w-12 mx-auto mb-3 text-gray-300" />
               <p>لا يوجد مستخدمون</p>
               <p className="text-sm mt-2">
                 استخدم سكريبت Firebase Admin لإنشاء مستخدمين جدد:
               </p>
-              <code className="block mt-2 p-2 bg-gray-100 rounded text-xs">
-                npm run create-admin email@example.com password role "Display Name"
+              <code className="block mt-2 p-2 bg-gray-100 rounded text-xs break-all">
+                npm run create-admin:cli email@example.com "Password123!" role "Display Name"
               </code>
             </div>
           ) : (
@@ -206,7 +214,7 @@ export function UserManagement() {
               </TableHeader>
               <TableBody>
                 {users.map((user) => (
-                  <TableRow key={user.uid}>
+                  <TableRow key={user.uid || user.id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
                         <Mail className="h-4 w-4 text-gray-400" />
@@ -366,9 +374,9 @@ export function UserManagement() {
               <Button
                 type="submit"
                 className="bg-[#38ada9] hover:bg-[#2d8a86]"
-                disabled={isLoading}
+                disabled={isSaving}
               >
-                {isLoading ? (
+                {isSaving ? (
                   <>
                     <Loader2 className="ml-2 h-4 w-4 animate-spin" />
                     جاري الحفظ...

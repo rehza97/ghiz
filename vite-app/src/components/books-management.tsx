@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { useBooks, useSaveBook, useDeleteBook, useSearchBooks } from '@/hooks/useFirestore'
+import { useBooks, useSaveBook, useUpdateBook, useDeleteBook, useSearchBooks } from '@/hooks/useFirestore'
+import { StorageService } from '@/services/storage.service'
+import { FileUpload } from '@/components/file-upload'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,6 +18,7 @@ export function BooksManagement() {
   const { data: books, isLoading, error } = useBooks(categoryFilter)
   const { data: searchResults } = useSearchBooks(searchQuery)
   const saveBook = useSaveBook()
+  const updateBook = useUpdateBook()
   const deleteBook = useDeleteBook()
 
   const [formData, setFormData] = useState<CreateBookInput & { isbn: string }>({
@@ -24,6 +27,7 @@ export function BooksManagement() {
     author: '',
     category: '',
     language: 'fr',
+    isActive: true,
   })
 
   const displayBooks = searchQuery.length >= 2 ? searchResults : books
@@ -36,7 +40,13 @@ export function BooksManagement() {
     const { isbn, ...bookData } = formData
 
     try {
-      await saveBook.mutateAsync({ isbn, data: bookData })
+      if (editingBook) {
+        // Update existing book
+        await updateBook.mutateAsync({ isbn, data: bookData })
+      } else {
+        // Create new book
+        await saveBook.mutateAsync({ isbn, data: bookData })
+      }
       setShowAddForm(false)
       setEditingBook(null)
       setFormData({
@@ -45,6 +55,7 @@ export function BooksManagement() {
         author: '',
         category: '',
         language: 'fr',
+        isActive: true,
       })
     } catch (error) {
       console.error('Error saving book:', error)
@@ -185,10 +196,24 @@ export function BooksManagement() {
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="coverUrl">رابط الغلاف</Label>
+                  <Label>غلاف الكتاب</Label>
+                  <FileUpload
+                    accept="image/*"
+                    maxSize={2}
+                    currentUrl={formData.coverUrl}
+                    onUpload={async (file) => {
+                      const isbn = formData.isbn || 'temp'
+                      const url = await StorageService.uploadBookCover(file, isbn)
+                      setFormData({ ...formData, coverUrl: url })
+                      return url
+                    }}
+                    onUrlChange={(url) => setFormData({ ...formData, coverUrl: url || undefined })}
+                  />
+                  <p className="text-xs text-gray-500">أو أدخل رابط الصورة يدوياً</p>
                   <Input
                     id="coverUrl"
                     type="url"
+                    placeholder="https://..."
                     value={formData.coverUrl || ''}
                     onChange={(e) => setFormData({ ...formData, coverUrl: e.target.value })}
                   />
@@ -206,12 +231,14 @@ export function BooksManagement() {
               </div>
 
               <div className="flex gap-2">
-                <Button type="submit" disabled={saveBook.isPending}>
-                  {saveBook.isPending ? (
+                <Button type="submit" disabled={saveBook.isPending || updateBook.isPending}>
+                  {(saveBook.isPending || updateBook.isPending) ? (
                     <>
                       <Loader2 className="h-4 w-4 ml-2 animate-spin" />
                       جاري الحفظ...
                     </>
+                  ) : editingBook ? (
+                    'تحديث'
                   ) : (
                     'حفظ'
                   )}
@@ -338,6 +365,7 @@ export function BooksManagement() {
                         publisher: book.publisher,
                         publishDate: book.publishDate,
                         pageCount: book.pageCount,
+                        isActive: book.isActive,
                       })
                       setShowAddForm(true)
                     }}

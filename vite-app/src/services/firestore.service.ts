@@ -11,20 +11,16 @@ import {
   getDocs,
   setDoc,
   updateDoc,
-  deleteDoc,
   query,
   where,
   orderBy,
   limit,
-  Query,
-  DocumentData,
-  serverTimestamp,
+  type Query,
+  type DocumentData,
   Timestamp,
   addDoc,
-  CollectionReference,
-  DocumentReference,
-} from 'firebase/firestore'
-import { firestore } from '@/lib/firebase'
+} from "firebase/firestore";
+import { firestore } from "@/lib/firebase";
 import type {
   Library,
   Floor,
@@ -33,10 +29,9 @@ import type {
   BookLocation,
   Scan,
   Correction,
-  AdminUser,
-  User,
   Analytics,
   SystemConfig,
+  AdminUser,
   CreateLibraryInput,
   CreateFloorInput,
   CreateShelfInput,
@@ -46,44 +41,46 @@ import type {
   UpdateShelfInput,
   UpdateBookInput,
   ShelfBook,
-} from '@/types'
+} from "@/types";
 
 // ==================== Helper Functions ====================
 
 function getTimestamp(): Timestamp {
-  return Timestamp.now()
+  return Timestamp.now();
 }
 
 // ==================== Libraries ====================
 
 export class LibraryService {
-  private static collectionPath = 'libraries'
+  private static collectionPath = "libraries";
 
   /**
    * Get all active libraries, optionally filtered by wilaya
    */
   static async getLibraries(wilaya?: string): Promise<Library[]> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      let q: Query<DocumentData> = collection(firestore, this.collectionPath)
+      let q: Query<DocumentData> = collection(firestore, this.collectionPath);
 
       // Filter by active libraries
-      q = query(q, where('isActive', '==', true))
+      q = query(q, where("isActive", "==", true));
 
       // Filter by wilaya if provided
-      if (wilaya && wilaya !== 'All' && wilaya !== 'Tous') {
-        q = query(q, where('wilaya', '==', wilaya))
+      if (wilaya && wilaya !== "All" && wilaya !== "Tous") {
+        q = query(q, where("wilaya", "==", wilaya));
       }
 
       // Order by city
-      q = query(q, orderBy('city'))
+      q = query(q, orderBy("city"));
 
-      const snapshot = await getDocs(q)
-      return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Library))
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as Library)
+      );
     } catch (error) {
-      console.error('Error fetching libraries:', error)
-      throw new Error(`Failed to fetch libraries: ${error}`)
+      console.error("Error fetching libraries:", error);
+      throw new Error(`Failed to fetch libraries: ${error}`);
     }
   }
 
@@ -91,30 +88,33 @@ export class LibraryService {
    * Get library by ID
    */
   static async getLibraryById(libraryId: string): Promise<Library | null> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      const docRef = doc(firestore, this.collectionPath, libraryId)
-      const docSnap = await getDoc(docRef)
+      const docRef = doc(firestore, this.collectionPath, libraryId);
+      const docSnap = await getDoc(docRef);
 
-      if (!docSnap.exists()) return null
+      if (!docSnap.exists()) return null;
 
-      return { id: docSnap.id, ...docSnap.data() } as Library
+      return { id: docSnap.id, ...docSnap.data() } as Library;
     } catch (error) {
-      console.error('Error fetching library:', error)
-      throw new Error(`Failed to fetch library: ${error}`)
+      console.error("Error fetching library:", error);
+      throw new Error(`Failed to fetch library: ${error}`);
     }
   }
 
   /**
    * Create or update a library
    */
-  static async saveLibrary(libraryId: string, data: CreateLibraryInput): Promise<void> {
-    if (!firestore) throw new Error('Firestore not initialized')
+  static async saveLibrary(
+    libraryId: string,
+    data: CreateLibraryInput
+  ): Promise<void> {
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      const docRef = doc(firestore, this.collectionPath, libraryId)
-      const timestamp = getTimestamp()
+      const docRef = doc(firestore, this.collectionPath, libraryId);
+      const timestamp = getTimestamp();
 
       const libraryData: Partial<Library> = {
         ...data,
@@ -123,12 +123,12 @@ export class LibraryService {
         isActive: true,
         createdAt: timestamp,
         updatedAt: timestamp,
-      }
+      };
 
-      await setDoc(docRef, libraryData, { merge: true })
+      await setDoc(docRef, libraryData, { merge: true });
     } catch (error) {
-      console.error('Error saving library:', error)
-      throw new Error(`Failed to save library: ${error}`)
+      console.error("Error saving library:", error);
+      throw new Error(`Failed to save library: ${error}`);
     }
   }
 
@@ -139,18 +139,18 @@ export class LibraryService {
     libraryId: string,
     data: UpdateLibraryInput
   ): Promise<void> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      const docRef = doc(firestore, this.collectionPath, libraryId)
+      const docRef = doc(firestore, this.collectionPath, libraryId);
 
       await updateDoc(docRef, {
         ...data,
         updatedAt: getTimestamp(),
-      })
+      });
     } catch (error) {
-      console.error('Error updating library:', error)
-      throw new Error(`Failed to update library: ${error}`)
+      console.error("Error updating library:", error);
+      throw new Error(`Failed to update library: ${error}`);
     }
   }
 
@@ -158,13 +158,13 @@ export class LibraryService {
    * Delete library (soft delete by setting isActive to false)
    */
   static async deleteLibrary(libraryId: string): Promise<void> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      await this.updateLibrary(libraryId, { isActive: false })
+      await this.updateLibrary(libraryId, { isActive: false });
     } catch (error) {
-      console.error('Error deleting library:', error)
-      throw new Error(`Failed to delete library: ${error}`)
+      console.error("Error deleting library:", error);
+      throw new Error(`Failed to delete library: ${error}`);
     }
   }
 }
@@ -176,36 +176,41 @@ export class FloorService {
    * Get all floors for a library
    */
   static async getFloorsByLibrary(libraryId: string): Promise<Floor[]> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      const floorsRef = collection(firestore, `libraries/${libraryId}/floors`)
-      const q = query(floorsRef, orderBy('floorNumber'))
+      const floorsRef = collection(firestore, `libraries/${libraryId}/floors`);
+      const q = query(floorsRef, orderBy("floorNumber"));
 
-      const snapshot = await getDocs(q)
-      return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Floor))
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as Floor)
+      );
     } catch (error) {
-      console.error('Error fetching floors:', error)
-      throw new Error(`Failed to fetch floors: ${error}`)
+      console.error("Error fetching floors:", error);
+      throw new Error(`Failed to fetch floors: ${error}`);
     }
   }
 
   /**
    * Get floor by ID
    */
-  static async getFloorById(libraryId: string, floorId: string): Promise<Floor | null> {
-    if (!firestore) throw new Error('Firestore not initialized')
+  static async getFloorById(
+    libraryId: string,
+    floorId: string
+  ): Promise<Floor | null> {
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      const docRef = doc(firestore, `libraries/${libraryId}/floors`, floorId)
-      const docSnap = await getDoc(docRef)
+      const docRef = doc(firestore, `libraries/${libraryId}/floors`, floorId);
+      const docSnap = await getDoc(docRef);
 
-      if (!docSnap.exists()) return null
+      if (!docSnap.exists()) return null;
 
-      return { id: docSnap.id, ...docSnap.data() } as Floor
+      return { id: docSnap.id, ...docSnap.data() } as Floor;
     } catch (error) {
-      console.error('Error fetching floor:', error)
-      throw new Error(`Failed to fetch floor: ${error}`)
+      console.error("Error fetching floor:", error);
+      throw new Error(`Failed to fetch floor: ${error}`);
     }
   }
 
@@ -217,11 +222,11 @@ export class FloorService {
     floorId: string,
     data: CreateFloorInput
   ): Promise<void> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      const docRef = doc(firestore, `libraries/${libraryId}/floors`, floorId)
-      const timestamp = getTimestamp()
+      const docRef = doc(firestore, `libraries/${libraryId}/floors`, floorId);
+      const timestamp = getTimestamp();
 
       const floorData: Partial<Floor> = {
         ...data,
@@ -231,12 +236,12 @@ export class FloorService {
         isActive: true,
         createdAt: timestamp,
         updatedAt: timestamp,
-      }
+      };
 
-      await setDoc(docRef, floorData, { merge: true })
+      await setDoc(docRef, floorData, { merge: true });
     } catch (error) {
-      console.error('Error saving floor:', error)
-      throw new Error(`Failed to save floor: ${error}`)
+      console.error("Error saving floor:", error);
+      throw new Error(`Failed to save floor: ${error}`);
     }
   }
 
@@ -248,18 +253,18 @@ export class FloorService {
     floorId: string,
     data: UpdateFloorInput
   ): Promise<void> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      const docRef = doc(firestore, `libraries/${libraryId}/floors`, floorId)
+      const docRef = doc(firestore, `libraries/${libraryId}/floors`, floorId);
 
       await updateDoc(docRef, {
         ...data,
         updatedAt: getTimestamp(),
-      })
+      });
     } catch (error) {
-      console.error('Error updating floor:', error)
-      throw new Error(`Failed to update floor: ${error}`)
+      console.error("Error updating floor:", error);
+      throw new Error(`Failed to update floor: ${error}`);
     }
   }
 }
@@ -270,21 +275,26 @@ export class ShelfService {
   /**
    * Get all shelves for a floor
    */
-  static async getShelvesByFloor(libraryId: string, floorId: string): Promise<Shelf[]> {
-    if (!firestore) throw new Error('Firestore not initialized')
+  static async getShelvesByFloor(
+    libraryId: string,
+    floorId: string
+  ): Promise<Shelf[]> {
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
       const shelvesRef = collection(
         firestore,
         `libraries/${libraryId}/floors/${floorId}/shelves`
-      )
-      const q = query(shelvesRef, where('isActive', '==', true))
+      );
+      const q = query(shelvesRef, where("isActive", "==", true));
 
-      const snapshot = await getDocs(q)
-      return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Shelf))
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as Shelf)
+      );
     } catch (error) {
-      console.error('Error fetching shelves:', error)
-      throw new Error(`Failed to fetch shelves: ${error}`)
+      console.error("Error fetching shelves:", error);
+      throw new Error(`Failed to fetch shelves: ${error}`);
     }
   }
 
@@ -296,22 +306,22 @@ export class ShelfService {
     floorId: string,
     shelfId: string
   ): Promise<Shelf | null> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
       const docRef = doc(
         firestore,
         `libraries/${libraryId}/floors/${floorId}/shelves`,
         shelfId
-      )
-      const docSnap = await getDoc(docRef)
+      );
+      const docSnap = await getDoc(docRef);
 
-      if (!docSnap.exists()) return null
+      if (!docSnap.exists()) return null;
 
-      return { id: docSnap.id, ...docSnap.data() } as Shelf
+      return { id: docSnap.id, ...docSnap.data() } as Shelf;
     } catch (error) {
-      console.error('Error fetching shelf:', error)
-      throw new Error(`Failed to fetch shelf: ${error}`)
+      console.error("Error fetching shelf:", error);
+      throw new Error(`Failed to fetch shelf: ${error}`);
     }
   }
 
@@ -324,20 +334,24 @@ export class ShelfService {
     shelfId: string,
     data: CreateShelfInput
   ): Promise<void> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
       const docRef = doc(
         firestore,
         `libraries/${libraryId}/floors/${floorId}/shelves`,
         shelfId
-      )
-      const timestamp = getTimestamp()
+      );
+      const timestamp = getTimestamp();
 
       // Calculate accuracy
-      const accuracy = data.capacity > 0 
-        ? Math.min(100, Math.max(0, (data.currentCount / data.capacity) * 100))
-        : 0
+      const accuracy =
+        data.capacity > 0
+          ? Math.min(
+              100,
+              Math.max(0, (data.currentCount / data.capacity) * 100)
+            )
+          : 0;
 
       const shelfData: Partial<Shelf> = {
         ...data,
@@ -348,12 +362,12 @@ export class ShelfService {
         isActive: true,
         createdAt: timestamp,
         updatedAt: timestamp,
-      }
+      };
 
-      await setDoc(docRef, shelfData, { merge: true })
+      await setDoc(docRef, shelfData, { merge: true });
     } catch (error) {
-      console.error('Error saving shelf:', error)
-      throw new Error(`Failed to save shelf: ${error}`)
+      console.error("Error saving shelf:", error);
+      throw new Error(`Failed to save shelf: ${error}`);
     }
   }
 
@@ -366,22 +380,22 @@ export class ShelfService {
     shelfId: string,
     data: UpdateShelfInput
   ): Promise<void> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
       const docRef = doc(
         firestore,
         `libraries/${libraryId}/floors/${floorId}/shelves`,
         shelfId
-      )
+      );
 
       await updateDoc(docRef, {
         ...data,
         updatedAt: getTimestamp(),
-      })
+      });
     } catch (error) {
-      console.error('Error updating shelf:', error)
-      throw new Error(`Failed to update shelf: ${error}`)
+      console.error("Error updating shelf:", error);
+      throw new Error(`Failed to update shelf: ${error}`);
     }
   }
 
@@ -393,20 +407,22 @@ export class ShelfService {
     floorId: string,
     shelfId: string
   ): Promise<ShelfBook[]> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
       const booksRef = collection(
         firestore,
         `libraries/${libraryId}/floors/${floorId}/shelves/${shelfId}/books`
-      )
-      const q = query(booksRef, orderBy('position'))
+      );
+      const q = query(booksRef, orderBy("position"));
 
-      const snapshot = await getDocs(q)
-      return snapshot.docs.map((doc) => ({ bookIsbn: doc.id, ...doc.data() } as ShelfBook))
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(
+        (doc) => ({ bookIsbn: doc.id, ...doc.data() } as ShelfBook)
+      );
     } catch (error) {
-      console.error('Error fetching shelf books:', error)
-      throw new Error(`Failed to fetch shelf books: ${error}`)
+      console.error("Error fetching shelf books:", error);
+      throw new Error(`Failed to fetch shelf books: ${error}`);
     }
   }
 }
@@ -414,30 +430,32 @@ export class ShelfService {
 // ==================== Books ====================
 
 export class BookService {
-  private static collectionPath = 'books'
+  private static collectionPath = "books";
 
   /**
    * Get all books
    */
   static async getBooks(categoryFilter?: string): Promise<Book[]> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      let q: Query<DocumentData> = collection(firestore, this.collectionPath)
+      let q: Query<DocumentData> = collection(firestore, this.collectionPath);
 
-      q = query(q, where('isActive', '==', true))
+      q = query(q, where("isActive", "==", true));
 
       if (categoryFilter) {
-        q = query(q, where('category', '==', categoryFilter))
+        q = query(q, where("category", "==", categoryFilter));
       }
 
-      q = query(q, orderBy('title'))
+      q = query(q, orderBy("title"));
 
-      const snapshot = await getDocs(q)
-      return snapshot.docs.map((doc) => ({ isbn: doc.id, ...doc.data() } as Book))
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(
+        (doc) => ({ isbn: doc.id, ...doc.data() } as Book)
+      );
     } catch (error) {
-      console.error('Error fetching books:', error)
-      throw new Error(`Failed to fetch books: ${error}`)
+      console.error("Error fetching books:", error);
+      throw new Error(`Failed to fetch books: ${error}`);
     }
   }
 
@@ -445,18 +463,18 @@ export class BookService {
    * Get book by ISBN
    */
   static async getBookByIsbn(isbn: string): Promise<Book | null> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      const docRef = doc(firestore, this.collectionPath, isbn)
-      const docSnap = await getDoc(docRef)
+      const docRef = doc(firestore, this.collectionPath, isbn);
+      const docSnap = await getDoc(docRef);
 
-      if (!docSnap.exists()) return null
+      if (!docSnap.exists()) return null;
 
-      return { isbn: docSnap.id, ...docSnap.data() } as Book
+      return { isbn: docSnap.id, ...docSnap.data() } as Book;
     } catch (error) {
-      console.error('Error fetching book:', error)
-      throw new Error(`Failed to fetch book: ${error}`)
+      console.error("Error fetching book:", error);
+      throw new Error(`Failed to fetch book: ${error}`);
     }
   }
 
@@ -464,30 +482,32 @@ export class BookService {
    * Search books by title, author, or ISBN
    */
   static async searchBooks(searchQuery: string): Promise<Book[]> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
       // Note: This is a simple implementation. For production, use Algolia or similar
       const q = query(
         collection(firestore, this.collectionPath),
-        where('isActive', '==', true),
+        where("isActive", "==", true),
         limit(50)
-      )
+      );
 
-      const snapshot = await getDocs(q)
-      const books = snapshot.docs.map((doc) => ({ isbn: doc.id, ...doc.data() } as Book))
+      const snapshot = await getDocs(q);
+      const books = snapshot.docs.map(
+        (doc) => ({ isbn: doc.id, ...doc.data() } as Book)
+      );
 
       // Client-side filtering (not ideal for production)
-      const lowerQuery = searchQuery.toLowerCase()
+      const lowerQuery = searchQuery.toLowerCase();
       return books.filter(
         (book) =>
           book.title.toLowerCase().includes(lowerQuery) ||
           book.author.toLowerCase().includes(lowerQuery) ||
           book.isbn.includes(searchQuery)
-      )
+      );
     } catch (error) {
-      console.error('Error searching books:', error)
-      throw new Error(`Failed to search books: ${error}`)
+      console.error("Error searching books:", error);
+      throw new Error(`Failed to search books: ${error}`);
     }
   }
 
@@ -495,25 +515,25 @@ export class BookService {
    * Save book
    */
   static async saveBook(isbn: string, data: CreateBookInput): Promise<void> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      const docRef = doc(firestore, this.collectionPath, isbn)
-      const timestamp = getTimestamp()
+      const docRef = doc(firestore, this.collectionPath, isbn);
+      const timestamp = getTimestamp();
 
       const bookData: Partial<Book> = {
         ...data,
         isbn,
-        language: data.language || 'fr', // Default language
+        language: data.language || "fr", // Default language
         isActive: true,
         createdAt: timestamp,
         updatedAt: timestamp,
-      }
+      };
 
-      await setDoc(docRef, bookData, { merge: true })
+      await setDoc(docRef, bookData, { merge: true });
     } catch (error) {
-      console.error('Error saving book:', error)
-      throw new Error(`Failed to save book: ${error}`)
+      console.error("Error saving book:", error);
+      throw new Error(`Failed to save book: ${error}`);
     }
   }
 
@@ -521,18 +541,18 @@ export class BookService {
    * Update book
    */
   static async updateBook(isbn: string, data: UpdateBookInput): Promise<void> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      const docRef = doc(firestore, this.collectionPath, isbn)
+      const docRef = doc(firestore, this.collectionPath, isbn);
 
       await updateDoc(docRef, {
         ...data,
         updatedAt: getTimestamp(),
-      })
+      });
     } catch (error) {
-      console.error('Error updating book:', error)
-      throw new Error(`Failed to update book: ${error}`)
+      console.error("Error updating book:", error);
+      throw new Error(`Failed to update book: ${error}`);
     }
   }
 
@@ -540,13 +560,13 @@ export class BookService {
    * Delete book (soft delete)
    */
   static async deleteBook(isbn: string): Promise<void> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      await this.updateBook(isbn, { isActive: false })
+      await this.updateBook(isbn, { isActive: false });
     } catch (error) {
-      console.error('Error deleting book:', error)
-      throw new Error(`Failed to delete book: ${error}`)
+      console.error("Error deleting book:", error);
+      throw new Error(`Failed to delete book: ${error}`);
     }
   }
 }
@@ -554,25 +574,29 @@ export class BookService {
 // ==================== Book Locations ====================
 
 export class BookLocationService {
-  private static collectionPath = 'bookLocations'
+  private static collectionPath = "bookLocations";
 
   /**
    * Get book locations by library
    */
-  static async getLocationsByLibrary(libraryId: string): Promise<BookLocation[]> {
-    if (!firestore) throw new Error('Firestore not initialized')
+  static async getLocationsByLibrary(
+    libraryId: string
+  ): Promise<BookLocation[]> {
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
       const q = query(
         collection(firestore, this.collectionPath),
-        where('libraryId', '==', libraryId)
-      )
+        where("libraryId", "==", libraryId)
+      );
 
-      const snapshot = await getDocs(q)
-      return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as BookLocation))
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as BookLocation)
+      );
     } catch (error) {
-      console.error('Error fetching book locations:', error)
-      throw new Error(`Failed to fetch book locations: ${error}`)
+      console.error("Error fetching book locations:", error);
+      throw new Error(`Failed to fetch book locations: ${error}`);
     }
   }
 
@@ -580,20 +604,22 @@ export class BookLocationService {
    * Get misplaced books in a library
    */
   static async getMisplacedBooks(libraryId: string): Promise<BookLocation[]> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
       const q = query(
         collection(firestore, this.collectionPath),
-        where('libraryId', '==', libraryId),
-        where('isCorrectOrder', '==', false)
-      )
+        where("libraryId", "==", libraryId),
+        where("isCorrectOrder", "==", false)
+      );
 
-      const snapshot = await getDocs(q)
-      return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as BookLocation))
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as BookLocation)
+      );
     } catch (error) {
-      console.error('Error fetching misplaced books:', error)
-      throw new Error(`Failed to fetch misplaced books: ${error}`)
+      console.error("Error fetching misplaced books:", error);
+      throw new Error(`Failed to fetch misplaced books: ${error}`);
     }
   }
 
@@ -606,27 +632,27 @@ export class BookLocationService {
     shelfId: string,
     data: Partial<BookLocation>
   ): Promise<void> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
       // Find existing location document
       const q = query(
         collection(firestore, this.collectionPath),
-        where('bookIsbn', '==', bookIsbn),
-        where('libraryId', '==', libraryId),
-        where('shelfId', '==', shelfId),
+        where("bookIsbn", "==", bookIsbn),
+        where("libraryId", "==", libraryId),
+        where("shelfId", "==", shelfId),
         limit(1)
-      )
+      );
 
-      const snapshot = await getDocs(q)
+      const snapshot = await getDocs(q);
 
       if (!snapshot.empty) {
         // Update existing document
-        const docRef = snapshot.docs[0].ref
+        const docRef = snapshot.docs[0].ref;
         await updateDoc(docRef, {
           ...data,
           updatedAt: getTimestamp(),
-        })
+        });
       } else {
         // Create new document
         await addDoc(collection(firestore, this.collectionPath), {
@@ -636,11 +662,11 @@ export class BookLocationService {
           ...data,
           createdAt: getTimestamp(),
           updatedAt: getTimestamp(),
-        })
+        });
       }
     } catch (error) {
-      console.error('Error updating book position:', error)
-      throw new Error(`Failed to update book position: ${error}`)
+      console.error("Error updating book position:", error);
+      throw new Error(`Failed to update book position: ${error}`);
     }
   }
 }
@@ -648,46 +674,51 @@ export class BookLocationService {
 // ==================== Scans ====================
 
 export class ScanService {
-  private static collectionPath = 'scans'
+  private static collectionPath = "scans";
 
   /**
    * Get recent scans for a library
    */
-  static async getRecentScans(libraryId: string, limitCount = 50): Promise<Scan[]> {
-    if (!firestore) throw new Error('Firestore not initialized')
+  static async getRecentScans(
+    libraryId: string,
+    limitCount = 50
+  ): Promise<Scan[]> {
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
       const q = query(
         collection(firestore, this.collectionPath),
-        where('libraryId', '==', libraryId),
-        orderBy('createdAt', 'desc'),
+        where("libraryId", "==", libraryId),
+        orderBy("createdAt", "desc"),
         limit(limitCount)
-      )
+      );
 
-      const snapshot = await getDocs(q)
-      return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Scan))
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as Scan)
+      );
     } catch (error) {
-      console.error('Error fetching scans:', error)
-      throw new Error(`Failed to fetch scans: ${error}`)
+      console.error("Error fetching scans:", error);
+      throw new Error(`Failed to fetch scans: ${error}`);
     }
   }
 
   /**
    * Save scan
    */
-  static async saveScan(scanData: Omit<Scan, 'id'>): Promise<string> {
-    if (!firestore) throw new Error('Firestore not initialized')
+  static async saveScan(scanData: Omit<Scan, "id">): Promise<string> {
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
       const docRef = await addDoc(collection(firestore, this.collectionPath), {
         ...scanData,
         createdAt: getTimestamp(),
-      })
+      });
 
-      return docRef.id
+      return docRef.id;
     } catch (error) {
-      console.error('Error saving scan:', error)
-      throw new Error(`Failed to save scan: ${error}`)
+      console.error("Error saving scan:", error);
+      throw new Error(`Failed to save scan: ${error}`);
     }
   }
 }
@@ -695,7 +726,7 @@ export class ScanService {
 // ==================== Corrections ====================
 
 export class CorrectionService {
-  private static collectionPath = 'corrections'
+  private static collectionPath = "corrections";
 
   /**
    * Get recent corrections for a library
@@ -704,40 +735,44 @@ export class CorrectionService {
     libraryId: string,
     limitCount = 50
   ): Promise<Correction[]> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
       const q = query(
         collection(firestore, this.collectionPath),
-        where('libraryId', '==', libraryId),
-        orderBy('createdAt', 'desc'),
+        where("libraryId", "==", libraryId),
+        orderBy("createdAt", "desc"),
         limit(limitCount)
-      )
+      );
 
-      const snapshot = await getDocs(q)
-      return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Correction))
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as Correction)
+      );
     } catch (error) {
-      console.error('Error fetching corrections:', error)
-      throw new Error(`Failed to fetch corrections: ${error}`)
+      console.error("Error fetching corrections:", error);
+      throw new Error(`Failed to fetch corrections: ${error}`);
     }
   }
 
   /**
    * Save correction
    */
-  static async saveCorrection(correctionData: Omit<Correction, 'id'>): Promise<string> {
-    if (!firestore) throw new Error('Firestore not initialized')
+  static async saveCorrection(
+    correctionData: Omit<Correction, "id">
+  ): Promise<string> {
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
       const docRef = await addDoc(collection(firestore, this.collectionPath), {
         ...correctionData,
         createdAt: getTimestamp(),
-      })
+      });
 
-      return docRef.id
+      return docRef.id;
     } catch (error) {
-      console.error('Error saving correction:', error)
-      throw new Error(`Failed to save correction: ${error}`)
+      console.error("Error saving correction:", error);
+      throw new Error(`Failed to save correction: ${error}`);
     }
   }
 
@@ -748,18 +783,18 @@ export class CorrectionService {
     correctionId: string,
     updates: Partial<Correction>
   ): Promise<void> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      const docRef = doc(firestore, this.collectionPath, correctionId)
+      const docRef = doc(firestore, this.collectionPath, correctionId);
 
       await updateDoc(docRef, {
         ...updates,
         updatedAt: getTimestamp(),
-      })
+      });
     } catch (error) {
-      console.error('Error updating correction:', error)
-      throw new Error(`Failed to update correction: ${error}`)
+      console.error("Error updating correction:", error);
+      throw new Error(`Failed to update correction: ${error}`);
     }
   }
 }
@@ -767,7 +802,7 @@ export class CorrectionService {
 // ==================== Analytics ====================
 
 export class AnalyticsService {
-  private static collectionPath = 'analytics'
+  private static collectionPath = "analytics";
 
   /**
    * Get analytics for a date range
@@ -777,23 +812,29 @@ export class AnalyticsService {
     endDate: string,
     libraryId?: string
   ): Promise<Analytics[]> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      let q: Query<DocumentData> = collection(firestore, this.collectionPath)
+      let q: Query<DocumentData> = collection(firestore, this.collectionPath);
 
       if (libraryId) {
-        q = query(q, where('libraryId', '==', libraryId))
+        q = query(q, where("libraryId", "==", libraryId));
       }
 
       // Note: Need composite index for this query
-      q = query(q, where('date', '>=', startDate), where('date', '<=', endDate))
+      q = query(
+        q,
+        where("date", ">=", startDate),
+        where("date", "<=", endDate)
+      );
 
-      const snapshot = await getDocs(q)
-      return snapshot.docs.map((doc) => ({ date: doc.id, ...doc.data() } as Analytics))
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(
+        (doc) => ({ date: doc.id, ...doc.data() } as Analytics)
+      );
     } catch (error) {
-      console.error('Error fetching analytics:', error)
-      throw new Error(`Failed to fetch analytics: ${error}`)
+      console.error("Error fetching analytics:", error);
+      throw new Error(`Failed to fetch analytics: ${error}`);
     }
   }
 
@@ -801,18 +842,101 @@ export class AnalyticsService {
    * Get analytics for a specific date
    */
   static async getAnalyticsForDate(date: string): Promise<Analytics | null> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      const docRef = doc(firestore, this.collectionPath, date)
-      const docSnap = await getDoc(docRef)
+      const docRef = doc(firestore, this.collectionPath, date);
+      const docSnap = await getDoc(docRef);
 
-      if (!docSnap.exists()) return null
+      if (!docSnap.exists()) return null;
 
-      return { date: docSnap.id, ...docSnap.data() } as Analytics
+      return { date: docSnap.id, ...docSnap.data() } as Analytics;
     } catch (error) {
-      console.error('Error fetching analytics for date:', error)
-      throw new Error(`Failed to fetch analytics: ${error}`)
+      console.error("Error fetching analytics for date:", error);
+      throw new Error(`Failed to fetch analytics: ${error}`);
+    }
+  }
+}
+
+// ==================== Admin Users ====================
+
+export class AdminUserService {
+  private static collectionPath = "admin_users";
+
+  /**
+   * Get all admin users
+   */
+  static async getAdminUsers(): Promise<AdminUser[]> {
+    if (!firestore) throw new Error("Firestore not initialized");
+
+    try {
+      const snapshot = await getDocs(
+        collection(firestore, this.collectionPath)
+      );
+      return snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          uid: doc.id, // Also include uid for compatibility
+          email: data.email || "",
+          displayName: data.displayName || "",
+          role: data.role || "admin",
+          permissions: data.permissions || {
+            canManageLibraries: true,
+            canManageBooks: true,
+            canManageUsers: data.role === "super_admin",
+            canViewAnalytics: true,
+            canManageSystem: data.role === "super_admin",
+          },
+          assignedLibraries: data.assignedLibraries || [],
+          isActive: data.isActive !== false,
+          createdAt: data.createdAt || getTimestamp(),
+          updatedAt: data.updatedAt || getTimestamp(),
+          ...data,
+        } as AdminUser;
+      });
+    } catch (error) {
+      console.error("Error fetching admin users:", error);
+      throw new Error(`Failed to fetch admin users: ${error}`);
+    }
+  }
+
+  /**
+   * Get admin user by UID
+   */
+  static async getAdminUserById(uid: string): Promise<AdminUser | null> {
+    if (!firestore) throw new Error("Firestore not initialized");
+
+    try {
+      const docRef = doc(firestore, this.collectionPath, uid);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          uid: docSnap.id, // Also include uid for compatibility
+          email: data.email || "",
+          displayName: data.displayName || "",
+          role: data.role || "admin",
+          permissions: data.permissions || {
+            canManageLibraries: true,
+            canManageBooks: true,
+            canManageUsers: data.role === "super_admin",
+            canViewAnalytics: true,
+            canManageSystem: data.role === "super_admin",
+          },
+          assignedLibraries: data.assignedLibraries || [],
+          isActive: data.isActive !== false,
+          createdAt: data.createdAt || getTimestamp(),
+          updatedAt: data.updatedAt || getTimestamp(),
+          ...data,
+        } as AdminUser;
+      }
+      return null;
+    } catch (error) {
+      console.error("Error fetching admin user:", error);
+      throw new Error(`Failed to fetch admin user: ${error}`);
     }
   }
 }
@@ -820,24 +944,24 @@ export class AnalyticsService {
 // ==================== System Configuration ====================
 
 export class SystemService {
-  private static collectionPath = 'system'
+  private static collectionPath = "system";
 
   /**
    * Get system configuration
    */
   static async getSystemConfig(): Promise<SystemConfig | null> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      const docRef = doc(firestore, this.collectionPath, 'config')
-      const docSnap = await getDoc(docRef)
+      const docRef = doc(firestore, this.collectionPath, "config");
+      const docSnap = await getDoc(docRef);
 
-      if (!docSnap.exists()) return null
+      if (!docSnap.exists()) return null;
 
-      return docSnap.data() as SystemConfig
+      return docSnap.data() as SystemConfig;
     } catch (error) {
-      console.error('Error fetching system config:', error)
-      throw new Error(`Failed to fetch system config: ${error}`)
+      console.error("Error fetching system config:", error);
+      throw new Error(`Failed to fetch system config: ${error}`);
     }
   }
 
@@ -848,19 +972,19 @@ export class SystemService {
     updates: Partial<SystemConfig>,
     adminId: string
   ): Promise<void> {
-    if (!firestore) throw new Error('Firestore not initialized')
+    if (!firestore) throw new Error("Firestore not initialized");
 
     try {
-      const docRef = doc(firestore, this.collectionPath, 'config')
+      const docRef = doc(firestore, this.collectionPath, "config");
 
       await updateDoc(docRef, {
         ...updates,
         updatedAt: getTimestamp(),
         updatedBy: adminId,
-      })
+      });
     } catch (error) {
-      console.error('Error updating system config:', error)
-      throw new Error(`Failed to update system config: ${error}`)
+      console.error("Error updating system config:", error);
+      throw new Error(`Failed to update system config: ${error}`);
     }
   }
 }
@@ -875,6 +999,6 @@ export const FirestoreService = {
   Scan: ScanService,
   Correction: CorrectionService,
   Analytics: AnalyticsService,
+  AdminUser: AdminUserService,
   System: SystemService,
-}
-
+};

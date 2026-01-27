@@ -7,10 +7,13 @@ import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 const firebaseConfig = {
   apiKey:
     import.meta.env.VITE_FIREBASE_API_KEY ||
-    "AIzaSyB5jl-Ex0BdOsXa5cCDGgY4tGOEzhUrUtU",
+    "AIzaSyB3FMXqnWvA6UNQ0SHJ_sgK9jK5NsQWfBk",
   authDomain:
     import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ||
     "spyware-7bfe6.firebaseapp.com",
+  databaseURL:
+    import.meta.env.VITE_FIREBASE_DATABASE_URL ||
+    "https://spyware-7bfe6-default-rtdb.europe-west1.firebasedatabase.app",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "spyware-7bfe6",
   storageBucket:
     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "spyware-7bfe6.appspot.com",
@@ -18,11 +21,7 @@ const firebaseConfig = {
     import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "53191143209",
   appId:
     import.meta.env.VITE_FIREBASE_APP_ID ||
-    "1:53191143209:web:e81eeb2352e35e9abed138",
-  // Realtime Database URL is optional - only needed if using Realtime Database
-  ...(import.meta.env.VITE_FIREBASE_DATABASE_URL && {
-    databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
-  }),
+    "1:53191143209:web:b4c1ef023455f8ccbed138",
 };
 
 // Initialize Firebase
@@ -85,7 +84,9 @@ try {
 
   // Initialize Firestore
   try {
-    firestore = getFirestore(app);
+    // Use the "book" database as configured in firebase.json
+    const databaseName = import.meta.env.VITE_FIRESTORE_DATABASE || "book";
+    firestore = getFirestore(app, databaseName);
     // Connect to emulator in development if needed
     if (
       import.meta.env.DEV &&
