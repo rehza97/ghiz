@@ -270,8 +270,8 @@ export function LandingPage() {
               حلول احترافية للمكتبات
             </div>
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-gray-900 dark:text-white leading-tight">
-              نظام إدارة مكتبات
-              <span className="block mt-2 text-[#38ada9]">متكامل وذكي</span>
+              DocShelf Eye
+              <span className="block mt-2 text-[#38ada9]">نظام إدارة مكتبات متكامل وذكي</span>
             </h1>
             <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto leading-relaxed">
               حل شامل لإدارة المكتبات باستخدام أحدث تقنيات الواقع المعزز والذكاء
