@@ -84,7 +84,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
 
   final bool _isScanning = true;
   final double _distanceToShelf = 2.0; // Distance simulée
-  String _scanStatus = 'Pointez la caméra vers le rayon';
+  String _scanStatus = 'وجّه الكاميرا نحو الرف';
   bool _isFocusing = false;
   Offset? _focusPoint;
 
@@ -281,7 +281,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
       if (kDebugMode) {
         debugPrint('❌ [BOOK ADD] Book not found for ISBN: $barcode');
       }
-      _showSnackBar('Code-barres non reconnu: $barcode', Colors.red);
+      _showSnackBar('الباركود غير معروف: $barcode', Colors.red);
       return;
     }
 
@@ -295,7 +295,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
       if (kDebugMode) {
         debugPrint('❌ [BOOK ADD] Wrong shelf - Expected: ${widget.shelfId}, Found: ${location?.shelfId ?? "null"}');
       }
-      _showSnackBar('${book.title} n\'est pas sur ce rayon', Colors.red);
+      _showSnackBar('${book.title} ليس على هذا الرف', Colors.red);
       return;
     }
 
@@ -323,7 +323,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
     await _updateARView();
     if (mounted) setState(() {});
 
-    _showSnackBar('${book.title} détecté ✓ (Pos: $physicalDetectionOrder)', Colors.green);
+    _showSnackBar('تم اكتشاف ${book.title} ✓ (الموقع: $physicalDetectionOrder)', Colors.green);
   }
 
   Future<void> _updateARView() async {
@@ -373,7 +373,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
             isCorrect: isCorrect,
             deviation: deviation,
             movementDirection:
-                physicalPosition < expectedPosition ? 'droite' : 'gauche',
+                physicalPosition < expectedPosition ? 'يمين' : 'يسار',
           );
         })
         .whereType<ShelfBook>()
@@ -399,7 +399,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
           barcode: loc.bookIsbn,
           isCorrect: loc.isCorrectOrder,
           deviation: (loc.expectedPosition - loc.position).abs(),
-          movementDirection: loc.position < loc.expectedPosition ? 'droite' : 'gauche',
+          movementDirection: loc.position < loc.expectedPosition ? 'يمين' : 'يسار',
         ));
       }
     }
@@ -415,14 +415,14 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
 
   void _updateScanStatus() {
     if (_detectedBarcodes.isEmpty) {
-      _scanStatus = 'Pointez la caméra vers le rayon (multi-codes supporté)';
+      _scanStatus = 'وجّه الكاميرا نحو الرف (يدعم عدة رموز)';
     } else {
       final count = _detectedBarcodes.length;
       if (_correctionGuide?.isInCorrectOrder ?? false) {
-        _scanStatus = '$count livre(s) détecté(s) - Tous en bon ordre ✓';
+        _scanStatus = '$count كتاب مكتشف - الكل بالترتيب الصحيح ✓';
       } else {
         final errors = _correctionGuide?.totalErrorsFound ?? 0;
-        _scanStatus = '$count livre(s) détecté(s) - $errors à corriger';
+        _scanStatus = '$count كتاب مكتشف - $errors يحتاج تصحيح';
       }
     }
   }
@@ -480,7 +480,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
       }
     });
 
-    _showSnackBar('Focus ajusté', Colors.cyan);
+    _showSnackBar('تم ضبط البؤرة', Colors.cyan);
   }
 
   void _triggerAutoFocus() {
@@ -503,14 +503,14 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
       }
     });
 
-    _showSnackBar('Focus automatique activé', Colors.cyan);
+    _showSnackBar('تم تفعيل الضبط التلقائي', Colors.cyan);
   }
 
   void _toggleTorch() {
     final currentTorch = _scannerController.torchEnabled;
     _scannerController.toggleTorch();
     _showSnackBar(
-      currentTorch ? 'Torche désactivée' : 'Torche activée',
+      currentTorch ? 'الفلاش مغلق' : 'الفلاش مفتوح',
       Colors.amber,
     );
   }
@@ -566,7 +566,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
               color: _isFocusing ? Colors.cyan : Colors.white,
             ),
             onPressed: _triggerAutoFocus,
-            tooltip: 'Focus automatique',
+            tooltip: 'ضبط تلقائي',
           ),
         ),
         const SizedBox(height: 8),
@@ -586,7 +586,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
                   : Colors.white,
             ),
             onPressed: _toggleTorch,
-            tooltip: 'Torche',
+            tooltip: 'فلاش',
           ),
         ),
       ],
@@ -610,7 +610,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
       _showTestBooksDialogContent(shelfBooks);
     } catch (e) {
       if (mounted) {
-        _showSnackBar('Erreur: $e', Colors.red);
+        _showSnackBar('خطأ: $e', Colors.red);
       }
     }
   }
@@ -623,7 +623,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
           children: [
             const Icon(Icons.book, color: Color(0xFF38ada9)),
             const SizedBox(width: 8),
-            const Text('Livres de Test'),
+            const Text('كتب التجربة'),
           ],
         ),
         content: SingleChildScrollView(
@@ -632,7 +632,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'ISBNs disponibles sur ce rayon:',
+                'الأرقام الدولية المتوفرة على هذا الرف:',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
@@ -690,7 +690,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Position: ${location.position} → ${location.expectedPosition}',
+                        'الموقع: ${location.position} → ${location.expectedPosition}',
                         style: TextStyle(
                           fontSize: 12,
                           color: isCorrect ? Colors.green : Colors.orange,
@@ -698,7 +698,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
                       ),
                       if (!isCorrect)
                         Text(
-                          '❌ Mal placé',
+                          '❌ في مكان خاطئ',
                           style: TextStyle(
                             fontSize: 11,
                             color: Colors.orange[700],
@@ -723,7 +723,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
                         Icon(Icons.info_outline, color: Colors.blue, size: 18),
                         SizedBox(width: 8),
                         Text(
-                          'Astuce:',
+                          'نصيحة:',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
@@ -733,9 +733,9 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
                     ),
                     SizedBox(height: 8),
                     Text(
-                      '• Utilisez le bouton clavier (🔤) pour tester sans barcode\n'
-                      '• Ou scannez les codes-barres visuels\n'
-                      '• Supporte horizontal, vertical et tous les angles',
+                      '• استخدم زر لوحة المفاتيح (🔤) للتجربة دون باركود\n'
+                      '• أو امسح الباركود المرئي\n'
+                      '• يدعم الأفقي والعمودي وجميع الزوايا',
                       style: TextStyle(fontSize: 12),
                     ),
                   ],
@@ -747,7 +747,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Fermer'),
+            child: const Text('إغلاق'),
           ),
         ],
       ),
@@ -759,12 +759,12 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Entrer ISBN manuellement'),
+        title: const Text('إدخال الرقم الدولي يدوياً'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Pour tester sans barcode physique, entrez un ISBN:',
+              'للتجربة دون باركود فعلي، أدخل الرقم الدولي:',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 12),
@@ -772,7 +772,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
               controller: controller,
               decoration: const InputDecoration(
                 hintText: '978-2070364008',
-                labelText: 'ISBN',
+                labelText: 'الرقم الدولي',
                 border: OutlineInputBorder(),
               ),
               keyboardType: TextInputType.number,
@@ -780,10 +780,10 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Vous pouvez entrer plusieurs ISBNs séparés par des virgules:\n\n'
-              'Exemples:\n'
-              '978-2070364008 (Correct)\n'
-              '978-2070113018, 978-2080701473 (Multiples)',
+              'يمكنك إدخال عدة أرقام دولية مفصولة بفواصل:\n\n'
+              'أمثلة:\n'
+              '978-2070364008\n'
+              '978-2070113018, 978-2080701473 (متعددة)',
               style: TextStyle(fontSize: 11, color: Colors.grey),
             ),
           ],
@@ -791,7 +791,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
+            child: const Text('إلغاء'),
           ),
           ElevatedButton(
             onPressed: () {
@@ -817,14 +817,14 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
                 Navigator.pop(context);
                 
                 if (isbns.length > 1) {
-                  _showSnackBar('${isbns.length} ISBN(s) ajouté(s)', Colors.blue);
+                  _showSnackBar('تمت إضافة ${isbns.length} رقم دولي', Colors.blue);
                 }
               }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF38ada9),
             ),
-            child: const Text('Scanner', style: TextStyle(color: Colors.white)),
+            child: const Text('مسح', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -850,7 +850,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Détection AR des Livres'),
+        title: const Text('اكتشاف الكتب بالواقع المعزز'),
         backgroundColor: const Color(0xFF38ada9),
         elevation: 0,
         actions: [
@@ -858,19 +858,19 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
           IconButton(
             icon: const Icon(Icons.list),
             onPressed: _showTestBooksDialog,
-            tooltip: 'Livres de test',
+            tooltip: 'كتب التجربة',
           ),
           // Manual input for testing
           IconButton(
             icon: const Icon(Icons.keyboard),
             onPressed: _showManualInputDialog,
-            tooltip: 'Entrer ISBN manuellement (Test)',
+            tooltip: 'إدخال الرقم يدوياً (تجربة)',
           ),
           if (_detectedBarcodes.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.refresh),
               onPressed: _clearDetection,
-              tooltip: 'Réinitialiser',
+              tooltip: 'إعادة تعيين',
             ),
         ],
       ),
@@ -1004,7 +1004,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
             const Icon(Icons.qr_code_scanner, color: Colors.cyan, size: 50),
             const SizedBox(height: 12),
             const Text(
-              'Scannez les codes-barres des livres',
+              'امسح باركود الكتب',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 16,
@@ -1071,7 +1071,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              'Pos: ${arData.currentPosition}/${arData.expectedPosition}',
+                              'الموقع: ${arData.currentPosition}/${arData.expectedPosition}',
                               style: const TextStyle(
                                 color: Colors.grey,
                                 fontSize: 9,
@@ -1119,7 +1119,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
                       ),
                       if (!_correctionGuide!.isInCorrectOrder)
                         Text(
-                          '${_correctionGuide!.totalErrorsFound} erreur(s) trouvée(s)',
+                          'تم العثور على ${_correctionGuide!.totalErrorsFound} خطأ',
                           style: const TextStyle(
                             color: Colors.grey,
                             fontSize: 12,
@@ -1134,7 +1134,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
                         backgroundColor: Colors.orange,
                       ),
                       child: const Text(
-                        'Corriger',
+                        'تصحيح',
                         style: TextStyle(color: Colors.white),
                       ),
                     ),
@@ -1360,8 +1360,8 @@ class AROverlayPainter extends CustomPainter {
     
     // Draw position info
     final positionText = arData.isInCorrectOrder
-        ? '✓ Pos ${arData.currentPosition}'
-        : 'Pos ${arData.currentPosition} → ${arData.expectedPosition}';
+        ? '✓ موقع ${arData.currentPosition}'
+        : 'موقع ${arData.currentPosition} → ${arData.expectedPosition}';
     
     final positionPainter = TextPainter(
       text: TextSpan(

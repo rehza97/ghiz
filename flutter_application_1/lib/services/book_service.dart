@@ -30,8 +30,8 @@ class BookService {
 
     final book = Book(
       isbn: isbn,
-      title: title ?? 'Titre inconnu',
-      author: author ?? 'Auteur inconnu',
+      title: title ?? 'عنوان غير معروف',
+      author: author ?? 'مؤلف غير معروف',
       category: category,
       scannedAt: DateTime.now(),
       order: _currentOrder++,

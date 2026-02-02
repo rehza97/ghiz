@@ -45,7 +45,7 @@ class _ScanScreenState extends State<ScanScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Ce livre a déjà été scanné'),
+            content: Text('هذا الكتاب ممسوح مسبقاً'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -63,7 +63,7 @@ class _ScanScreenState extends State<ScanScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Livre #${book.order ?? widget.bookService.totalScanned} scanné avec succès!'),
+            content: Text('تم مسح الكتاب #${book.order ?? widget.bookService.totalScanned} بنجاح!'),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 2),
           ),
@@ -80,7 +80,7 @@ class _ScanScreenState extends State<ScanScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Scanner de Livres'),
+        title: const Text('ماسح الكتب'),
         backgroundColor: const Color(0xFF38ada9),
         foregroundColor: Colors.white,
       ),
@@ -107,7 +107,7 @@ class _ScanScreenState extends State<ScanScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Livres scannés: ${widget.bookService.totalScanned}',
+                    'الكتب الممسوحة: ${widget.bookService.totalScanned}',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
@@ -116,7 +116,7 @@ class _ScanScreenState extends State<ScanScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'Pointez la caméra vers le code-barres du livre',
+                    'وجّه الكاميرا نحو باركود الكتاب',
                     style: TextStyle(
                       color: Colors.white70,
                       fontSize: 14,

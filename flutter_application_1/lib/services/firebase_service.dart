@@ -20,14 +20,14 @@ class FirebaseService {
     try {
       Query query = _firestore.collection('libraries').where('isActive', isEqualTo: true);
 
-      if (wilaya != null && wilaya != 'Tous') {
+      if (wilaya != null && wilaya != 'Tous' && wilaya != 'الكل') {
         query = query.where('wilaya', isEqualTo: wilaya);
       }
 
       final snapshot = await query.get();
       return snapshot.docs.map((doc) => Library.fromFirestore(doc)).toList();
     } catch (e) {
-      throw Exception('Erreur lors de la récupération des bibliothèques: $e');
+      throw Exception('خطأ في جلب المكتبات: $e');
     }
   }
 
@@ -38,7 +38,7 @@ class FirebaseService {
       if (!doc.exists) return null;
       return Library.fromFirestore(doc);
     } catch (e) {
-      throw Exception('Erreur lors de la récupération de la bibliothèque: $e');
+      throw Exception('خطأ في جلب المكتبة: $e');
     }
   }
 
@@ -50,7 +50,7 @@ class FirebaseService {
         SetOptions(merge: true),
       );
     } catch (e) {
-      throw Exception('Erreur lors de la sauvegarde de la bibliothèque: $e');
+      throw Exception('خطأ في حفظ المكتبة: $e');
     }
   }
 
@@ -68,7 +68,7 @@ class FirebaseService {
 
       return snapshot.docs.map((doc) => Floor.fromFirestore(doc)).toList();
     } catch (e) {
-      throw Exception('Erreur lors de la récupération des étages: $e');
+      throw Exception('خطأ في جلب الطوابق: $e');
     }
   }
 
@@ -85,7 +85,7 @@ class FirebaseService {
       if (!doc.exists) return null;
       return Floor.fromFirestore(doc);
     } catch (e) {
-      throw Exception('Erreur lors de la récupération de l\'étage: $e');
+      throw Exception('خطأ في جلب الطابق: $e');
     }
   }
 
@@ -105,7 +105,7 @@ class FirebaseService {
 
       return snapshot.docs.map((doc) => Shelf.fromFirestore(doc)).toList();
     } catch (e) {
-      throw Exception('Erreur lors de la récupération des rayons: $e');
+      throw Exception('خطأ في جلب الرفوف: $e');
     }
   }
 
@@ -124,7 +124,7 @@ class FirebaseService {
       if (!doc.exists) return null;
       return Shelf.fromFirestore(doc);
     } catch (e) {
-      throw Exception('Erreur lors de la récupération du rayon: $e');
+      throw Exception('خطأ في جلب الرف: $e');
     }
   }
 
@@ -139,7 +139,7 @@ class FirebaseService {
       }
       return null;
     } catch (e) {
-      throw Exception('Erreur lors de la récupération du rayon: $e');
+      throw Exception('خطأ في جلب الرف: $e');
     }
   }
 
@@ -152,7 +152,7 @@ class FirebaseService {
       if (!doc.exists) return null;
       return Book.fromFirestore(doc);
     } catch (e) {
-      throw Exception('Erreur lors de la récupération du livre: $e');
+      throw Exception('خطأ في جلب الكتاب: $e');
     }
   }
 
@@ -177,7 +177,7 @@ class FirebaseService {
             book.isbn.contains(query);
       }).toList();
     } catch (e) {
-      throw Exception('Erreur lors de la recherche: $e');
+      throw Exception('خطأ في البحث: $e');
     }
   }
 
@@ -192,7 +192,7 @@ class FirebaseService {
 
       return snapshot.docs.map((doc) => Book.fromFirestore(doc)).toList();
     } catch (e) {
-      throw Exception('Erreur lors de la récupération des livres: $e');
+      throw Exception('خطأ في جلب الكتب: $e');
     }
   }
 
@@ -204,7 +204,7 @@ class FirebaseService {
         SetOptions(merge: true),
       );
     } catch (e) {
-      throw Exception('Erreur lors de la sauvegarde du livre: $e');
+      throw Exception('خطأ في حفظ الكتاب: $e');
     }
   }
 
@@ -223,7 +223,7 @@ class FirebaseService {
       if (snapshot.docs.isEmpty) return null;
       return BookLocation.fromFirestore(snapshot.docs.first);
     } catch (e) {
-      throw Exception('Erreur lors de la récupération de la localisation: $e');
+      throw Exception('خطأ في جلب الموقع: $e');
     }
   }
 
@@ -239,7 +239,7 @@ class FirebaseService {
 
       return snapshot.docs.map((doc) => BookLocation.fromFirestore(doc)).toList();
     } catch (e) {
-      throw Exception('Erreur lors de la récupération des livres du rayon: $e');
+      throw Exception('خطأ في جلب كتب الرف: $e');
     }
   }
 
@@ -261,7 +261,7 @@ class FirebaseService {
         await _firestore.collection('book_locations').add(location.toFirestore());
       }
     } catch (e) {
-      throw Exception('Erreur lors de la mise à jour de la position: $e');
+      throw Exception('خطأ في تحديث الموقع: $e');
     }
   }
 
@@ -296,7 +296,7 @@ class FirebaseService {
       final docRef = await _firestore.collection('scans').add(scanData);
       return docRef.id;
     } catch (e) {
-      throw Exception('Erreur lors de l\'enregistrement du scan: $e');
+      throw Exception('خطأ في تسجيل المسح: $e');
     }
   }
 
@@ -326,7 +326,7 @@ class FirebaseService {
       final docRef = await _firestore.collection('corrections').add(correctionData);
       return docRef.id;
     } catch (e) {
-      throw Exception('Erreur lors de l\'enregistrement de la correction: $e');
+      throw Exception('خطأ في تسجيل التصحيح: $e');
     }
   }
 
@@ -338,7 +338,7 @@ class FirebaseService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      throw Exception('Erreur lors de la mise à jour de la correction: $e');
+      throw Exception('خطأ في تحديث التصحيح: $e');
     }
   }
 

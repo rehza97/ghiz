@@ -32,7 +32,7 @@ class _ScannedBooksScreenState extends State<ScannedBooksScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Aucun livre scanné',
+                    'لا توجد كتب ممسوحة',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -41,7 +41,7 @@ class _ScannedBooksScreenState extends State<ScannedBooksScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Commencez par scanner des livres',
+                    'ابدأ بمسح الكتب',
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.grey[500],
@@ -70,7 +70,7 @@ class _ScannedBooksScreenState extends State<ScannedBooksScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Livres Scannés',
+                          'الكتب الممسوحة',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 24,
@@ -79,7 +79,7 @@ class _ScannedBooksScreenState extends State<ScannedBooksScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '${books.length} livre${books.length > 1 ? 's' : ''}',
+                          books.length == 1 ? 'كتاب واحد' : '${books.length} كتب',
                           style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 14,
@@ -100,7 +100,7 @@ class _ScannedBooksScreenState extends State<ScannedBooksScreen> {
                           child: _buildStatCard(
                             icon: Icons.collections_bookmark,
                             value: '${books.length}',
-                            label: 'Total',
+                            label: 'المجموع',
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -108,7 +108,7 @@ class _ScannedBooksScreenState extends State<ScannedBooksScreen> {
                           child: _buildStatCard(
                             icon: Icons.check_circle,
                             value: '${books.length}',
-                            label: 'Uniques',
+                            label: 'فريدة',
                           ),
                         ),
                       ],
@@ -140,7 +140,7 @@ class _ScannedBooksScreenState extends State<ScannedBooksScreen> {
                         ElevatedButton.icon(
                           onPressed: _showClearDialog,
                           icon: const Icon(Icons.delete_sweep),
-                          label: const Text('Effacer tout'),
+                          label: const Text('مسح الكل'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             foregroundColor: Colors.white,
@@ -241,7 +241,7 @@ class _ScannedBooksScreenState extends State<ScannedBooksScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'ISBN: ${book.isbn}',
+              'الرقم الدولي: ${book.isbn}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -262,11 +262,11 @@ class _ScannedBooksScreenState extends State<ScannedBooksScreen> {
         trailing: PopupMenuButton(
           itemBuilder: (context) => [
             PopupMenuItem(
-              child: const Text('Détails'),
+              child: const Text('تفاصيل'),
               onTap: () => _showBookDetails(book),
             ),
             PopupMenuItem(
-              child: const Text('Supprimer'),
+              child: const Text('حذف'),
               onTap: () => _deleteBook(book),
             ),
           ],
@@ -284,18 +284,18 @@ class _ScannedBooksScreenState extends State<ScannedBooksScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            _detailRow('Auteur:', book.author),
-            _detailRow('ISBN:', book.isbn),
-            _detailRow('Catégorie:', book.category),
+            _detailRow('المؤلف:', book.author),
+            _detailRow('الرقم الدولي:', book.isbn),
+            _detailRow('التصنيف:', book.category),
             if (book.scannedAt != null)
-              _detailRow('Scanné:', _formatDateTime(book.scannedAt)),
-            _detailRow('Ordre:', '#${book.order ?? ""}'),
+              _detailRow('تاريخ المسح:', _formatDateTime(book.scannedAt)),
+            _detailRow('الترتيب:', '#${book.order ?? ""}'),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Fermer'),
+            child: const Text('إغلاق'),
           ),
         ],
       ),
@@ -319,12 +319,12 @@ class _ScannedBooksScreenState extends State<ScannedBooksScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Supprimer le livre'),
-        content: Text('Êtes-vous sûr de vouloir supprimer "${book.title}"?'),
+        title: const Text('حذف الكتاب'),
+        content: Text('هل أنت متأكد من حذف "${book.title}"؟'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
+            child: const Text('إلغاء'),
           ),
           TextButton(
             onPressed: () {
@@ -333,13 +333,13 @@ class _ScannedBooksScreenState extends State<ScannedBooksScreen> {
               setState(() {});
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Livre supprimé'),
+                  content: Text('تم حذف الكتاب'),
                   duration: Duration(seconds: 2),
                 ),
               );
             },
             child: const Text(
-              'Supprimer',
+              'حذف',
               style: TextStyle(color: Colors.red),
             ),
           ),
@@ -352,14 +352,14 @@ class _ScannedBooksScreenState extends State<ScannedBooksScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Effacer tous les livres'),
+        title: const Text('مسح كل الكتب'),
         content: const Text(
-          'Êtes-vous sûr de vouloir supprimer tous les livres scannés?',
+          'هل أنت متأكد من حذف كل الكتب الممسوحة؟',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
+            child: const Text('إلغاء'),
           ),
           TextButton(
             onPressed: () {
@@ -368,13 +368,13 @@ class _ScannedBooksScreenState extends State<ScannedBooksScreen> {
               setState(() {});
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Tous les livres ont été supprimés'),
+                  content: Text('تم حذف كل الكتب'),
                   duration: Duration(seconds: 2),
                 ),
               );
             },
             child: const Text(
-              'Supprimer',
+              'حذف',
               style: TextStyle(color: Colors.red),
             ),
           ),

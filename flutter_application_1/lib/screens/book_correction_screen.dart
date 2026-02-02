@@ -48,7 +48,7 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Mouvement effectué ✓'),
+        content: Text('تم تنفيذ الحركة ✓'),
         backgroundColor: Colors.green,
         duration: Duration(seconds: 2),
       ),
@@ -68,7 +68,7 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Mouvement annulé'),
+        content: Text('تم إلغاء الحركة'),
         backgroundColor: Colors.orange,
         duration: Duration(seconds: 2),
       ),
@@ -79,12 +79,12 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Réinitialiser'),
-        content: const Text('Êtes-vous sûr de vouloir recommencer?'),
+        title: const Text('إعادة تعيين'),
+        content: const Text('هل أنت متأكد من البدء من جديد؟'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
+            child: const Text('إلغاء'),
           ),
           TextButton(
             onPressed: () {
@@ -93,7 +93,7 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
                 _correctionState = _correctionState.reset();
               });
             },
-            child: const Text('Oui'),
+            child: const Text('نعم'),
           ),
         ],
       ),
@@ -105,17 +105,17 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('Correction Complète! 🎉'),
+        title: const Text('اكتمل التصحيح! 🎉'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Tous les livres sont maintenant en bon ordre.',
+              'جميع الكتب الآن بالترتيب الصحيح.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
             Text(
-              '${_correctionState.movesMade} mouvements effectués',
+              'تم تنفيذ ${_correctionState.movesMade} حركة',
               style: const TextStyle(fontSize: 14, color: Colors.grey),
               textAlign: TextAlign.center,
             ),
@@ -127,7 +127,7 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
               Navigator.pop(context);
               Navigator.pop(context);
             },
-            child: const Text('Terminer'),
+            child: const Text('إنهاء'),
           ),
         ],
       ),
@@ -138,7 +138,7 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Correction des Livres'),
+        title: const Text('تصحيح الكتب'),
         backgroundColor: const Color(0xFF38ada9),
         elevation: 0,
       ),
@@ -226,7 +226,7 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Statut du Rayon',
+                'حالة الرف',
                 style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
               const SizedBox(height: 4),
@@ -258,7 +258,7 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
                   ),
                 ),
                 const Text(
-                  'correct',
+                  'صحيح',
                   style: TextStyle(color: Colors.white, fontSize: 10),
                 ),
               ],
@@ -279,7 +279,7 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
             Icon(Icons.check_circle, size: 64, color: Colors.green),
             SizedBox(height: 16),
             Text(
-              'Tous les livres sont en bon ordre!',
+              'جميع الكتب بالترتيب الصحيح!',
               style: TextStyle(fontSize: 16),
             ),
           ],
@@ -293,7 +293,7 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
         // Mouvements restants
         if (_correctionState.remainingMoves.isNotEmpty) ...[
           const Text(
-            'Mouvements à effectuer',
+            'الحركات المطلوبة',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
@@ -313,7 +313,7 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
         // Mouvements complétés
         if (_correctionState.completedMoves.isNotEmpty) ...[
           const Text(
-            'Mouvements effectués',
+            'الحركات المنفذة',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
@@ -411,7 +411,7 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
             Row(
               children: [
                 Chip(
-                  label: Text('Position ${move.fromPosition}'),
+                  label: Text('الموقع ${move.fromPosition}'),
                   labelStyle: const TextStyle(fontSize: 11),
                   visualDensity: VisualDensity.compact,
                   backgroundColor: Colors.blue[100],
@@ -426,7 +426,7 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
                 ),
                 const SizedBox(width: 8),
                 Chip(
-                  label: Text('Position ${move.toPosition}'),
+                  label: Text('الموقع ${move.toPosition}'),
                   labelStyle: const TextStyle(fontSize: 11),
                   visualDensity: VisualDensity.compact,
                   backgroundColor: Colors.green[100],
@@ -446,7 +446,7 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                     child: const Text(
-                      'Marquer comme effectué',
+                      'تحديد كمنفذ',
                       style: TextStyle(color: Colors.white),
                     ),
                   ),
@@ -478,7 +478,7 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
               child: OutlinedButton.icon(
                 onPressed: _undoLastMove,
                 icon: const Icon(Icons.undo),
-                label: const Text('Annuler'),
+                label: const Text('إلغاء'),
               ),
             ),
           if (_correctionState.completedMoves.isNotEmpty)
@@ -487,7 +487,7 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
             child: OutlinedButton.icon(
               onPressed: _resetCorrection,
               icon: const Icon(Icons.refresh),
-              label: const Text('Réinitialiser'),
+              label: const Text('إعادة تعيين'),
             ),
           ),
           const SizedBox(width: 12),
@@ -495,7 +495,7 @@ class _BookCorrectionScreenState extends State<BookCorrectionScreen> {
             child: ElevatedButton.icon(
               onPressed: () => Navigator.pop(context),
               icon: const Icon(Icons.close),
-              label: const Text('Fermer'),
+              label: const Text('إغلاق'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF38ada9),
               ),

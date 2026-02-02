@@ -26,7 +26,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Vue AR - Ordre des Livres'),
+        title: const Text('عرض الواقع المعزز - ترتيب الكتب'),
         backgroundColor: const Color(0xFF38ada9),
         foregroundColor: Colors.white,
       ),
@@ -38,12 +38,12 @@ class _ARViewScreenState extends State<ARViewScreen> {
                   Icon(Icons.view_in_ar, size: 80, color: Colors.grey),
                   SizedBox(height: 20),
                   Text(
-                    'Aucun livre scanné',
+                    'لا توجد كتب ممسوحة',
                     style: TextStyle(fontSize: 18, color: Colors.grey),
                   ),
                   SizedBox(height: 10),
                   Text(
-                    'Scannez des livres pour voir leur ordre en AR',
+                    'امسح الكتب لرؤية ترتيبها بالواقع المعزز',
                     style: TextStyle(fontSize: 14, color: Colors.grey),
                     textAlign: TextAlign.center,
                   ),
@@ -88,7 +88,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
                     child: Column(
                       children: [
                         const Text(
-                          'ORDRE DES LIVRES',
+                          'ترتيب الكتب',
                           style: TextStyle(
                             color: Color(0xFF38ada9),
                             fontSize: 18,
@@ -188,7 +188,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              '${books.length} livre${books.length > 1 ? 's' : ''} scanné${books.length > 1 ? 's' : ''}',
+                              books.length == 1 ? 'كتاب واحد ممسوح' : '${books.length} كتب ممسوحة',
                               style: const TextStyle(
                                 color: Colors.white70,
                                 fontSize: 14,
@@ -198,7 +198,7 @@ class _ARViewScreenState extends State<ARViewScreen> {
                         ),
                         const SizedBox(height: 8),
                         const Text(
-                          'L\'ordre est déterminé par l\'ordre de scan',
+                          'الترتيب حسب تسلسل المسح',
                           style: TextStyle(color: Colors.white60, fontSize: 12),
                           textAlign: TextAlign.center,
                         ),

@@ -14,7 +14,7 @@ class MainApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Scanner de Livres AR - Algérie',
+      title: 'ماسح الكتب بالواقع المعزز - الجزائر',
       theme: ThemeData(
         primaryColor: const Color(0xFF38ada9),
         colorScheme: ColorScheme.fromSeed(

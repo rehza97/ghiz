@@ -80,36 +80,36 @@ class BookMovement {
     );
   }
 
-  /// Obtient une description texte de la priorité
+  /// وصف أولوية الحركة (عرض للمستخدم)
   String get priorityDescription {
     switch (priority) {
       case 0:
-        return 'CRITIQUE';
+        return 'حرج';
       case 1:
-        return 'ÉLEVÉE';
+        return 'عالية';
       case 2:
-        return 'MOYENNE';
+        return 'متوسطة';
       case 3:
-        return 'NORMALE';
+        return 'عادية';
       case 4:
       case 5:
-        return 'FAIBLE';
+        return 'منخفضة';
       default:
-        return 'NORMALE';
+        return 'عادية';
     }
   }
 
-  /// Obtient une description texte de la direction
+  /// نص اتجاه الحركة (عرض للمستخدم)
   String get directionText {
     switch (direction) {
       case MovementDirection.left:
-        return 'gauche';
+        return 'يسار';
       case MovementDirection.right:
-        return 'droite';
+        return 'يمين';
       case MovementDirection.up:
-        return 'haut';
+        return 'أعلى';
       case MovementDirection.down:
-        return 'bas';
+        return 'أسفل';
     }
   }
 

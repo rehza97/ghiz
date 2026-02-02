@@ -22,17 +22,17 @@ class ARService {
 
     if (location.isCorrectOrder) {
       status = BadgeStatus.correct;
-      statusMessage = 'À la bonne position ✓';
+      statusMessage = 'في المكان الصحيح ✓';
     } else {
       final deviation = location.positionDeviation;
       if (deviation >= 3) {
         status = BadgeStatus.wrongPosition;
         statusMessage =
-            'Doit être à la position ${location.expectedPosition}';
+            'يجب أن يكون في الموقع ${location.expectedPosition}';
       } else {
         status = BadgeStatus.wrongPosition;
         statusMessage =
-            'Position ${location.position}/${location.expectedPosition}';
+            'الموقع ${location.position}/${location.expectedPosition}';
       }
     }
 
@@ -203,7 +203,7 @@ class ARService {
     return 3;
   }
 
-  /// Privé: Génère une instruction de mouvement
+  /// يولد تعليمة الحركة
   String _generateMovementInstruction(
     String title,
     int from,
@@ -212,11 +212,11 @@ class ARService {
     int distance,
   ) {
     final directionText = direction == MovementDirection.right
-        ? 'droite'
+        ? 'اليمين'
         : direction == MovementDirection.left
-            ? 'gauche'
-            : 'vers le haut';
-    return 'Déplacer "$title" vers la $directionText ($distance positions)';
+            ? 'اليسار'
+            : 'لأعلى';
+    return 'نقل "$title" إلى $directionText ($distance مواقع)';
   }
 
   /// Privé: Obtient la couleur du statut

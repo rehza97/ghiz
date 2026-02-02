@@ -60,7 +60,7 @@ class _LibraryInfoScreenState extends State<LibraryInfoScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Informations'),
+        title: const Text('معلومات'),
         backgroundColor: const Color(0xFF38ada9),
       ),
       body: SingleChildScrollView(
@@ -118,7 +118,7 @@ class _LibraryInfoScreenState extends State<LibraryInfoScreen> {
                   // Location Card
                   _buildInfoCard(
                     icon: Icons.location_on,
-                    title: 'Adresse',
+                    title: 'العنوان',
                     children: [
                       Text(library.address),
                       const SizedBox(height: 4),
@@ -136,7 +136,7 @@ class _LibraryInfoScreenState extends State<LibraryInfoScreen> {
                   // Contact Card
                   _buildInfoCard(
                     icon: Icons.phone,
-                    title: 'Contact',
+                    title: 'التواصل',
                     children: [
                       if (library.phone != null) ...[
                         Text(
@@ -163,7 +163,7 @@ class _LibraryInfoScreenState extends State<LibraryInfoScreen> {
                   if (library.hours != null)
                     _buildInfoCard(
                       icon: Icons.schedule,
-                      title: 'Horaires',
+                      title: 'أوقات العمل',
                       children: [
                         Text(
                           library.hours!,
@@ -179,9 +179,9 @@ class _LibraryInfoScreenState extends State<LibraryInfoScreen> {
                   // Stats Card
                   _buildInfoCard(
                     icon: Icons.analytics,
-                    title: 'Informations',
+                    title: 'معلومات',
                     children: [
-                      _statRow('Étages', '${_floors.length}'),
+                      _statRow('الطوابق', '${_floors.length}'),
                     ],
                   ),
                 ],
@@ -195,7 +195,7 @@ class _LibraryInfoScreenState extends State<LibraryInfoScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Étages',
+                    'الطوابق',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -217,14 +217,14 @@ class _LibraryInfoScreenState extends State<LibraryInfoScreen> {
                         child: Column(
                           children: [
                             Text(
-                              'Erreur: $_error',
+                              'خطأ: $_error',
                               style: TextStyle(color: Colors.grey[600], fontSize: 12),
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 8),
                             TextButton(
                               onPressed: _loadFloors,
-                              child: const Text('Réessayer'),
+                              child: const Text('إعادة المحاولة'),
                             ),
                           ],
                         ),
@@ -235,7 +235,7 @@ class _LibraryInfoScreenState extends State<LibraryInfoScreen> {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 24),
                         child: Text(
-                          'Aucun étage trouvé',
+                          'لم يتم العثور على طوابق',
                           style: TextStyle(
                             color: Colors.grey[600],
                           ),
@@ -357,7 +357,7 @@ class _LibraryInfoScreenState extends State<LibraryInfoScreen> {
           ),
         ),
         subtitle: Text(
-          '${shelves.length} rayon${shelves.length > 1 ? 's' : ''}',
+          shelves.length == 1 ? 'رف واحد' : '${shelves.length} رفوف',
           style: TextStyle(
             fontSize: 12,
             color: Colors.grey[600],
@@ -383,7 +383,7 @@ class _LibraryInfoScreenState extends State<LibraryInfoScreen> {
                 ],
                 if (shelves.isEmpty)
                   Text(
-                    'Aucun rayon',
+                    'لا توجد رفوف',
                     style: TextStyle(
                       color: Colors.grey[600],
                       fontSize: 12,

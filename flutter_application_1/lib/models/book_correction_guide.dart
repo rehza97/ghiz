@@ -69,12 +69,12 @@ class BookCorrectionGuide {
     return (correctCount / currentOrder.length) * 100;
   }
 
-  /// Obtient la description de l'exactitude
+  /// وصف دقة الترتيب
   String get accuracyDescription {
-    if (isInCorrectOrder) return 'Parfait ✓';
-    if (accuracyPercentage >= 80) return 'Bon (${accuracyPercentage.toStringAsFixed(0)}%)';
-    if (accuracyPercentage >= 50) return 'Moyen (${accuracyPercentage.toStringAsFixed(0)}%)';
-    return 'Faible (${accuracyPercentage.toStringAsFixed(0)}%)';
+    if (isInCorrectOrder) return 'ممتاز ✓';
+    if (accuracyPercentage >= 80) return 'جيد (${accuracyPercentage.toStringAsFixed(0)}%)';
+    if (accuracyPercentage >= 50) return 'متوسط (${accuracyPercentage.toStringAsFixed(0)}%)';
+    return 'ضعيف (${accuracyPercentage.toStringAsFixed(0)}%)';
   }
 
   /// Obtient les mouvements triés par priorité

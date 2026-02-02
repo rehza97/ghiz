@@ -88,19 +88,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.home),
-            label: 'Accueil',
+            label: 'الرئيسية',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.search),
-            label: 'Rechercher',
+            label: 'بحث',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.qr_code_2),
-            label: 'Scannés',
+            label: 'الممسوحة',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.info),
-            label: 'Infos',
+            label: 'معلومات',
           ),
         ],
       ),
@@ -135,7 +135,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'Bienvenue à',
+                  'مرحباً بك في',
                   style: TextStyle(
                     color: Colors.white70,
                     fontSize: 14,
@@ -170,7 +170,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Actions rapides',
+                  'إجراءات سريعة',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -182,14 +182,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     _buildActionCard(
                       icon: Icons.search,
-                      title: 'Rechercher un livre',
-                      subtitle: 'Trouver un livre spécifique',
+                      title: 'البحث عن كتاب',
+                      subtitle: 'العثور على كتاب معين',
                       onTap: () => setState(() => _currentIndex = 1),
                     ),
                     _buildActionCard(
                       icon: Icons.qr_code_scanner,
-                      title: 'Scanner des livres',
-                      subtitle: 'Détecter les codes-barres',
+                      title: 'مسح الكتب',
+                      subtitle: 'اكتشاف الباركود',
                       onTap: () {
                         Navigator.push(
                           context,
@@ -204,13 +204,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     _buildActionCard(
                       icon: Icons.view_in_ar,
-                      title: 'Correction AR',
-                      subtitle: 'Réorganiser les livres',
+                      title: 'تصحيح الواقع المعزز',
+                      subtitle: 'إعادة ترتيب الكتب',
                       onTap: () {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text(
-                                'Commencez par scanner des livres'),
+                            content: Text('ابدأ بمسح الكتب'),
                             duration: Duration(seconds: 2),
                           ),
                         );
@@ -218,8 +217,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     _buildActionCard(
                       icon: Icons.list,
-                      title: 'Mes scans',
-                      subtitle: 'Voir l\'historique',
+                      title: 'مسوحاتي',
+                      subtitle: 'عرض السجل',
                       onTap: () => setState(() => _currentIndex = 2),
                     ),
                   ],
@@ -235,7 +234,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Statistiques',
+                  'إحصائيات',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -249,7 +248,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: _buildStatCard(
                         icon: Icons.library_books,
                         value: '${widget.library.floorCount}',
-                        label: 'Étages',
+                        label: 'طوابق',
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -257,7 +256,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: _buildStatCard(
                         icon: Icons.shelves,
                         value: '${_bookService.totalScanned}',
-                        label: 'Livres',
+                        label: 'كتب',
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -265,7 +264,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: _buildStatCard(
                         icon: Icons.check_circle,
                         value: '0',
-                        label: 'Corrigés',
+                        label: 'مصححة',
                       ),
                     ),
                   ],
@@ -297,7 +296,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Astuce',
+                          'نصيحة',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
@@ -306,7 +305,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Utilisez le scanner pour détecter les codes-barres rapidement',
+                          'استخدم الماسح لاكتشاف الباركود بسرعة',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.blue[700],

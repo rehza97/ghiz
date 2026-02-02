@@ -75,27 +75,27 @@ class ShelfCorrectionState {
   /// Nombre de livres correctement positionnés
   int get correctBooksCount => currentBooks.where((b) => b.isCorrect).length;
 
-  /// Obtient le statut sous forme de texte
+  /// نص الحالة
   String get statusText {
-    if (correctionComplete) return 'Correction complète ✓';
-    if (progressPercentage >= 75) return 'Presque complète';
-    if (progressPercentage >= 50) return 'En cours';
-    if (progressPercentage >= 25) return 'Débuté';
-    return 'Pas commencé';
+    if (correctionComplete) return 'التصحيح مكتمل ✓';
+    if (progressPercentage >= 75) return 'شبه مكتمل';
+    if (progressPercentage >= 50) return 'قيد التنفيذ';
+    if (progressPercentage >= 25) return 'بدأ';
+    return 'لم يبدأ';
   }
 
-  /// Obtient une description détaillée de l'état
+  /// وصف تفصيلي للحالة
   String get detailedStatus {
-    final moved = '$movesMade mouvements effectués';
-    final remaining = '${remainingMoves.length} à faire';
-    return '$moved, $remaining';
+    final moved = '$movesMade حركة منفذة';
+    final remaining = '${remainingMoves.length} متبقية';
+    return '$moved، $remaining';
   }
 
   /// Marque un mouvement comme complété
   ShelfCorrectionState markMoveAsCompleted(String bookBarcode) {
     final move = remainingMoves.firstWhere(
       (m) => m.bookBarcode == bookBarcode,
-      orElse: () => throw Exception('Mouvement non trouvé'),
+      orElse: () => throw Exception('الحركة غير موجودة'),
     );
 
     final newRemaining = List<BookMovement>.from(remainingMoves)

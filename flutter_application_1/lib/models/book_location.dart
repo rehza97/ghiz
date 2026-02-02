@@ -153,10 +153,10 @@ class BookLocation {
   /// Calcule la distance entre la position actuelle et attendue
   int get positionDeviation => (expectedPosition - position).abs();
 
-  /// Obtient la direction du mouvement requis
+  /// اتجاه الحركة المطلوب (عرض للمستخدم)
   String get movementDirection {
-    if (position == expectedPosition) return 'correct';
-    return position < expectedPosition ? 'right' : 'left';
+    if (position == expectedPosition) return 'صحيح';
+    return position < expectedPosition ? 'يمين' : 'يسار';
   }
 
   @override

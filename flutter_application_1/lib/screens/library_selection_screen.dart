@@ -18,9 +18,9 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
   bool _loading = true;
   String? _error;
 
-  // Liste des wilayas algériennes
+  // قائمة الولايات الجزائرية
   final List<String> wilayas = [
-    'Tous',
+    'الكل',
     'Alger',
     'Oran',
     'Constantine',
@@ -82,7 +82,7 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
   ];
 
   List<Library> get filteredLibraries {
-    if (selectedWilaya == null || selectedWilaya == 'Tous') {
+    if (selectedWilaya == null || selectedWilaya == 'الكل') {
       return _libraries;
     }
     return _libraries
@@ -96,7 +96,7 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
       _error = null;
     });
     try {
-      final wilaya = (selectedWilaya == null || selectedWilaya == 'Tous')
+      final wilaya = (selectedWilaya == null || selectedWilaya == 'الكل')
           ? null
           : selectedWilaya;
       final list = await _firebase.getLibraries(wilaya: wilaya);
@@ -146,7 +146,7 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
             flexibleSpace: FlexibleSpaceBar(
               titlePadding: const EdgeInsets.only(left: 16, bottom: 16),
               title: const Text(
-                'Scanner de Livres AR',
+                'ماسح الكتب بالواقع المعزز',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -191,7 +191,7 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
                         ),
                         const SizedBox(height: 20),
                         const Text(
-                          'Bienvenue',
+                          'مرحباً',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 34,
@@ -208,7 +208,7 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
                         ),
                         const SizedBox(height: 10),
                         const Text(
-                          'Sélectionnez votre bibliothèque',
+                          'اختر مكتبتك',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 15,
@@ -239,7 +239,7 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
                   final wilaya = wilayas[index];
                   final isSelected =
                       selectedWilaya == wilaya ||
-                      (selectedWilaya == null && wilaya == 'Tous');
+                      (selectedWilaya == null && wilaya == 'الكل');
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: FilterChip(
@@ -256,7 +256,7 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
                       selected: isSelected,
                       onSelected: (selected) {
                         setState(() {
-                          if (wilaya == 'Tous') {
+                          if (wilaya == 'الكل') {
                             selectedWilaya = null;
                           } else if (selected) {
                             selectedWilaya = wilaya;
@@ -312,7 +312,7 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
                               Icon(Icons.error_outline, size: 48, color: Colors.grey[600]),
                               const SizedBox(height: 16),
                               Text(
-                                'Erreur de chargement',
+                                'خطأ في التحميل',
                                 style: TextStyle(fontSize: 18, color: Colors.grey[800]),
                               ),
                               const SizedBox(height: 8),
@@ -327,7 +327,7 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
                               ElevatedButton(
                                 onPressed: _loadLibraries,
                                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF38ada9)),
-                                child: const Text('Réessayer', style: TextStyle(color: Colors.white)),
+                                child: const Text('إعادة المحاولة', style: TextStyle(color: Colors.white)),
                               ),
                             ],
                           ),
@@ -339,7 +339,7 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
                               padding: const EdgeInsets.all(32),
                               child: Center(
                                 child: Text(
-                                  'Aucune bibliothèque pour le moment.',
+                                  'لا توجد مكتبات حالياً.',
                                   style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                                 ),
                               ),
@@ -440,7 +440,7 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              '${library.floorCount} étage${library.floorCount > 1 ? 's' : ''}',
+                              library.floorCount == 1 ? 'طابق واحد' : '${library.floorCount} طوابق',
                               style: TextStyle(
                                 fontSize: 13,
                                 color: Colors.grey[600],
@@ -627,7 +627,7 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Bienvenue à',
+                  'مرحباً بك في',
                   style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 8),
@@ -658,7 +658,7 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                     child: const Text(
-                      'Continuer',
+                      'متابعة',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 16,

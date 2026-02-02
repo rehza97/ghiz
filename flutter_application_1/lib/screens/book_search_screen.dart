@@ -21,20 +21,20 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FirebaseService _firebase = FirebaseService();
   List<Book> _searchResults = [];
-  String _selectedCategory = 'Tous';
+  String _selectedCategory = 'الكل';
   bool _loading = false;
   String? _error;
 
   final List<String> _categories = [
-    'Tous',
-    'Fiction',
-    'Littérature Algérienne',
-    'Science-Fiction',
-    'Fantasy',
-    'Dystopie',
-    'Romance Classique',
-    'Aventure Classique',
-    'Classique Français',
+    'الكل',
+    'رواية',
+    'أدب جزائري',
+    'خيال علمي',
+    'فانتازيا',
+    'ديستوبيا',
+    'رومانسية كلاسيكية',
+    'مغامرة كلاسيكية',
+    'كلاسيكي فرنسي',
   ];
 
   @override
@@ -81,7 +81,7 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
   }
 
   List<Book> _filterByCategoryList(List<Book> books, String category) {
-    if (category == 'Tous') return books;
+    if (category == 'الكل') return books;
     return books.where((b) => b.category == category).toList();
   }
 
@@ -148,7 +148,7 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
                 child: TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
-                    hintText: 'Titre, auteur ou ISBN...',
+                    hintText: 'العنوان، المؤلف أو الرقم الدولي...',
                     hintStyle: TextStyle(color: Colors.grey[400]),
                     border: InputBorder.none,
                     prefixIcon: const Icon(
@@ -225,7 +225,7 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
                     TextButton.icon(
                       onPressed: _loadInitialBooks,
                       icon: const Icon(Icons.refresh),
-                      label: const Text('Réessayer'),
+                                label: const Text('إعادة المحاولة'),
                     ),
                   ],
                 ),
@@ -236,10 +236,10 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text(
-                  _searchResults.isEmpty
-                      ? 'Aucun livre trouvé'
-                      : '${_searchResults.length} livre${_searchResults.length > 1 ? 's' : ''}',
+                child:                     Text(
+                      _searchResults.isEmpty
+                      ? 'لا توجد كتب'
+                      : _searchResults.length == 1 ? 'كتاب واحد' : '${_searchResults.length} كتب',
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey[600],
@@ -262,8 +262,8 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
                         color: Colors.grey[300],
                       ),
                       const SizedBox(height: 16),
-                      Text(
-                        'Aucun livre trouvé',
+                    Text(
+                      'لا توجد كتب',
                         style: TextStyle(
                           fontSize: 16,
                           color: Colors.grey[600],
@@ -272,7 +272,7 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Essayez une autre recherche',
+                        'جرّب بحثاً آخر',
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey[500],
@@ -363,7 +363,7 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'par ${book.author}',
+                          'تأليف ${book.author}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -388,8 +388,8 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
                               Chip(
                                 label: Text(
                                   location.isCorrectOrder
-                                      ? 'En place'
-                                      : 'À ranger',
+                                      ? 'في مكانه'
+                                      : 'يحتاج ترتيب',
                                   style: const TextStyle(fontSize: 10),
                                 ),
                                 visualDensity: VisualDensity.compact,
@@ -493,7 +493,7 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
 
                 // Details
                 Text(
-                  'Informations',
+                  'معلومات',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -501,24 +501,24 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _buildDetailRow('ISBN', book.isbn),
-                _buildDetailRow('Catégorie', book.category),
+                _buildDetailRow('الرقم الدولي', book.isbn),
+                _buildDetailRow('التصنيف', book.category),
                 if (location != null) ...[
                   FutureBuilder<String>(
-                    future: _firebase.getFloorById(widget.library.id, location.floorId).then((f) => f?.name ?? 'N/A'),
-                    builder: (context, snap) => _buildDetailRow('Étage', snap.data ?? '...'),
+                    future: _firebase.getFloorById(widget.library.id, location.floorId).then((f) => f?.name ?? '-'),
+                    builder: (context, snap) => _buildDetailRow('الطابق', snap.data ?? '...'),
                   ),
                   _buildDetailRow(
-                    'Rayon',
+                    'الرف',
                     '${location.shelfId}',
                   ),
                   _buildDetailRow(
-                    'Position',
+                    'الموقع',
                     '${location.position}',
                   ),
                   _buildDetailRow(
-                    'État',
-                    location.isCorrectOrder ? '✓ En place' : '⚠ À ranger',
+                    'الحالة',
+                    location.isCorrectOrder ? '✓ في مكانه' : '⚠ يحتاج ترتيب',
                   ),
                 ],
 
@@ -530,7 +530,7 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
                     Expanded(
                       child: TextButton(
                         onPressed: () => Navigator.pop(context),
-                        child: const Text('Fermer'),
+                        child: const Text('إغلاق'),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -540,13 +540,13 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
                           Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Guidance vers le livre...'),
+                              content: Text('التوجيه إلى الكتاب...'),
                               duration: Duration(seconds: 2),
                             ),
                           );
                         },
                         icon: const Icon(Icons.map),
-                        label: const Text('Localiser'),
+                        label: const Text('تحديد الموقع'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF38ada9),
                         ),

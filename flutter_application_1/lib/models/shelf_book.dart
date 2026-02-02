@@ -92,8 +92,8 @@ class ShelfBook {
 
   /// Obtient une description de l'état du livre
   String get statusDescription {
-    if (isCorrect) return 'À la bonne position';
-    return 'Doit être déplacé vers la position $expectedPosition';
+    if (isCorrect) return 'في المكان الصحيح';
+    return 'يجب نقله إلى الموقع $expectedPosition';
   }
 
   @override

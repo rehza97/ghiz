@@ -23,7 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Scanner de Livres AR'),
+        title: const Text('ماسح الكتب بالواقع المعزز'),
         backgroundColor: const Color(0xFF38ada9),
         foregroundColor: Colors.white,
       ),
@@ -49,15 +49,15 @@ class _HomeScreenState extends State<HomeScreen> {
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.list),
-            label: 'Liste',
+            label: 'القائمة',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.qr_code_scanner),
-            label: 'Scanner',
+            label: 'الماسح',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.view_in_ar),
-            label: 'AR',
+            label: 'الواقع المعزز',
           ),
         ],
       ),
@@ -76,7 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             children: [
               Text(
-                'Livres Scannés',
+                'الكتب الممسوحة',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 24,
@@ -85,7 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 10),
               Text(
-                'Total: ${books.length}',
+                'المجموع: ${books.length}',
                 style: const TextStyle(
                   color: Colors.white70,
                   fontSize: 16,
@@ -107,7 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    'Aucun livre scanné',
+                    'لا توجد كتب ممسوحة',
                     style: TextStyle(
                       fontSize: 18,
                       color: Colors.grey[600],
@@ -115,7 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Utilisez l\'onglet Scanner pour commencer',
+                    'استخدم تبويب الماسح للبدء',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[500],
@@ -156,11 +156,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(height: 4),
-                        Text('ISBN: ${book.isbn}'),
-                        if (book.author.isNotEmpty) Text('Auteur: ${book.author}'),
+                        Text('الرقم الدولي: ${book.isbn}'),
+                        if (book.author.isNotEmpty) Text('المؤلف: ${book.author}'),
                         if (book.scannedAt != null)
                           Text(
-                            'Scanné: ${_formatDateTime(book.scannedAt!)}',
+                            'تاريخ المسح: ${_formatDateTime(book.scannedAt!)}',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey[600],
@@ -176,7 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         });
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Livre supprimé'),
+                            content: Text('تم حذف الكتاب'),
                             duration: Duration(seconds: 1),
                           ),
                         );
@@ -195,14 +195,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 showDialog(
                   context: context,
                   builder: (context) => AlertDialog(
-                    title: const Text('Effacer tous les livres'),
+                    title: const Text('مسح كل الكتب'),
                     content: const Text(
-                      'Êtes-vous sûr de vouloir supprimer tous les livres scannés ?',
+                      'هل أنت متأكد من حذف كل الكتب الممسوحة؟',
                     ),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(context),
-                        child: const Text('Annuler'),
+                        child: const Text('إلغاء'),
                       ),
                       TextButton(
                         onPressed: () {
@@ -212,12 +212,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Tous les livres ont été supprimés'),
+                              content: Text('تم حذف كل الكتب'),
                             ),
                           );
                         },
                         child: const Text(
-                          'Supprimer',
+                          'حذف',
                           style: TextStyle(color: Colors.red),
                         ),
                       ),
@@ -226,7 +226,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
               icon: const Icon(Icons.delete_sweep),
-              label: const Text('Effacer tout'),
+              label: const Text('مسح الكل'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
