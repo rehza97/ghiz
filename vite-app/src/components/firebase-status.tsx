@@ -45,8 +45,9 @@ export function FirebaseStatus() {
         off(testRef)
       })
 
-      // Timeout after 5 seconds
+      // Timeout after 5 seconds – clean up listener and update status
       setTimeout(() => {
+        unsubscribe()
         off(testRef)
         setStatus(prev => {
           if (prev.database === 'checking') {

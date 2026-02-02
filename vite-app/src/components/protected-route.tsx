@@ -13,7 +13,8 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, requireSuperAdmin = false }: ProtectedRouteProps) {
-  const { currentUser, adminUser, loading, isSuperAdmin } = useAuth()
+  const { currentUser, adminUser: _adminUser, loading, isSuperAdmin } = useAuth()
+  void _adminUser // kept for future use (e.g. role display or admin doc checks)
 
   if (loading) {
     return (

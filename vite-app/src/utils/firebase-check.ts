@@ -41,9 +41,9 @@ export function checkFirebaseStatus(): FirebaseStatus {
   return status;
 }
 
-export function logFirebaseStatus(): void {
+export function logFirebaseStatus(): FirebaseStatus {
   const status = checkFirebaseStatus();
-  
+
   console.group("🔥 Firebase Status");
   console.log("Initialized:", status.initialized ? "✅" : "❌");
   console.log("\nServices:");
