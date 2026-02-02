@@ -35,6 +35,10 @@ export function LoginPage() {
     formState: { errors },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: 'admin@library.dz',
+      password: 'Password123!',
+    },
   })
 
   const onSubmit = async (data: LoginFormValues) => {
@@ -76,7 +80,7 @@ export function LoginPage() {
               <CardTitle className="text-2xl">تسجيل الدخول</CardTitle>
             </div>
             <CardDescription>
-              أدخل بياناتك للوصول إلى لوحة التحكم
+              أدخل بياناتك للوصول إلى لوحة التحكم. البيانات الافتراضية: admin@library.dz / Password123!
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -98,7 +102,7 @@ export function LoginPage() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="admin@example.com"
+                  placeholder="admin@library.dz"
                   {...register('email')}
                   className="h-11"
                 />
@@ -125,7 +129,8 @@ export function LoginPage() {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="Password123!"
+                  autoComplete="current-password"
                   {...register('password')}
                   className="h-11"
                 />
