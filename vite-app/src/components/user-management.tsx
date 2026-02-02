@@ -26,6 +26,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { FillTestDataButton } from '@/components/fill-test-data-button'
 import {
   Select,
   SelectContent,
@@ -36,24 +37,18 @@ import {
 import { Users, Plus, Edit, Shield, Loader2, Mail, User } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { useAuth } from '@/contexts/auth-context'
-
-interface AdminUser {
-  uid?: string
-  id?: string
-  email: string
-  displayName?: string
-  role: 'admin' | 'super_admin' | 'librarian'
-  libraryId?: string
-  isActive: boolean
-  createdAt?: string
-}
+import { useQueryClient } from '@tanstack/react-query'
+import { createAdminUserViaFunction } from '@/services/admin-user.service'
+import type { AdminUser } from '@/types'
 
 export function UserManagement() {
   const { isSuperAdmin } = useAuth()
+  const queryClient = useQueryClient()
   const { data: users, isLoading: usersLoading } = useAdminUsers()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
   const {
     register,
@@ -72,26 +67,49 @@ export function UserManagement() {
 
   const selectedRole = watch('role')
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: {
+    email: string
+    displayName?: string
+    role: string
+    libraryId?: string
+    password?: string
+  }) => {
+    setCreateError(null)
     try {
       setIsSaving(true)
-      
-      // User creation/update must be done via Firebase Admin SDK
-      // Show instructions to use the CLI script
-      const command = `npm run create-admin:cli "${data.email}" "${data.password || 'Password123!'}" ${data.role} "${data.displayName || 'User'}"`
-      
-      alert(
-        'لإنشاء أو تحديث مستخدم، يرجى استخدام سكريبت Firebase Admin:\n\n' +
-        command +
-        '\n\nسيتم إنشاء المستخدم في Firebase Auth وإنشاء وثيقة في Firestore.'
-      )
-      
+
+      if (editingUser) {
+        alert(
+          'تحديث المستخدم من الواجهة قيد التطوير. لتحديث كلمة المرور أو الدور استخدم سكريبت create-admin من الطرفية.'
+        )
+        return
+      }
+
+      await createAdminUserViaFunction({
+        email: data.email,
+        password: data.password || 'Password123!',
+        role: data.role as 'super_admin' | 'admin' | 'librarian',
+        displayName: data.displayName || undefined,
+        assignedLibraries: data.libraryId ? [data.libraryId] : undefined,
+      })
+
+      await queryClient.invalidateQueries({ queryKey: ['adminUsers'] })
       setIsDialogOpen(false)
       setEditingUser(null)
       reset()
-    } catch (error) {
-      console.error('Error saving user:', error)
-      alert('حدث خطأ: ' + (error as Error).message)
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string }
+      const message =
+        err.message ||
+        (err.code === 'functions/unauthenticated'
+          ? 'يجب تسجيل الدخول'
+          : err.code === 'functions/permission-denied'
+            ? 'ليس لديك صلاحية إنشاء مستخدمين'
+            : err.code === 'functions/failed-precondition'
+              ? 'الوظيفة غير متاحة. تأكد من نشر Cloud Function: firebase deploy --only functions'
+              : 'فشل في إنشاء المستخدم')
+      setCreateError(message)
+      console.error('Error creating user:', error)
     } finally {
       setIsSaving(false)
     }
@@ -103,7 +121,7 @@ export function UserManagement() {
       email: user.email,
       displayName: user.displayName || '',
       role: user.role,
-      libraryId: user.libraryId,
+      libraryId: user.assignedLibraries?.[0] ?? '',
     })
     setIsDialogOpen(true)
   }
@@ -171,7 +189,7 @@ export function UserManagement() {
                 إدارة المستخدمين
               </CardTitle>
               <CardDescription>
-                {users.length} مستخدم
+                {users?.length ?? 0} مستخدم
               </CardDescription>
             </div>
             <Button
@@ -194,11 +212,8 @@ export function UserManagement() {
               <Users className="h-12 w-12 mx-auto mb-3 text-gray-300" />
               <p>لا يوجد مستخدمون</p>
               <p className="text-sm mt-2">
-                استخدم سكريبت Firebase Admin لإنشاء مستخدمين جدد:
+                انقر "إضافة مستخدم" لإنشاء مستخدمين جدد من الواجهة.
               </p>
-              <code className="block mt-2 p-2 bg-gray-100 rounded text-xs break-all">
-                npm run create-admin:cli email@example.com "Password123!" role "Display Name"
-              </code>
             </div>
           ) : (
             <Table>
@@ -214,7 +229,7 @@ export function UserManagement() {
               </TableHeader>
               <TableBody>
                 {users.map((user) => (
-                  <TableRow key={user.uid || user.id}>
+                  <TableRow key={user.id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
                         <Mail className="h-4 w-4 text-gray-400" />
@@ -223,7 +238,7 @@ export function UserManagement() {
                     </TableCell>
                     <TableCell>{user.displayName || '-'}</TableCell>
                     <TableCell>{getRoleBadge(user.role)}</TableCell>
-                    <TableCell>{user.libraryId || '-'}</TableCell>
+                    <TableCell>{user.assignedLibraries?.[0] ?? '-'}</TableCell>
                     <TableCell>
                       <Badge
                         variant={user.isActive ? 'default' : 'secondary'}
@@ -257,9 +272,15 @@ export function UserManagement() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[500px]" dir="rtl">
           <DialogHeader>
-            <DialogTitle>
-              {editingUser ? 'تعديل المستخدم' : 'إضافة مستخدم جديد'}
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle>
+                {editingUser ? 'تعديل المستخدم' : 'إضافة مستخدم جديد'}
+              </DialogTitle>
+              <FillTestDataButton
+                formKey="user"
+                onFill={(data) => reset(data)}
+              />
+            </div>
             <DialogDescription>
               {editingUser
                 ? 'قم بتعديل معلومات المستخدم'
@@ -352,16 +373,11 @@ export function UserManagement() {
                 </div>
               )}
 
-              <div className="bg-blue-50 p-3 rounded-lg">
-                <p className="text-sm text-blue-800">
-                  💡 ملاحظة: لإنشاء مستخدم جديد، استخدم سكريبت Firebase Admin:
-                </p>
-                <code className="block mt-2 p-2 bg-white rounded text-xs">
-                  npm run create-admin {watch('email') || 'email@example.com'}{' '}
-                  {watch('password') || 'password'} {watch('role') || 'role'} "
-                  {watch('displayName') || 'Display Name'}"
-                </code>
-              </div>
+              {createError && (
+                <div className="rounded-lg bg-red-50 p-3 text-sm text-red-800">
+                  {createError}
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/contexts/auth-context'
 import { FirebaseStatus } from '@/components/firebase-status'
 import { LibraryManagement } from '@/components/library-management'
@@ -57,12 +57,30 @@ function ShelfManagementWrapper({ libraryId, floorId, onBack }: { libraryId: str
   )
 }
 
+const VALID_TABS: TabType[] = ['overview', 'libraries', 'books', 'floors', 'shelves', 'users', 'analytics', 'settings']
+
+function isValidTab(tab: string | undefined): tab is TabType {
+  return tab != null && VALID_TABS.includes(tab as TabType)
+}
+
 export function AdminDashboard() {
   const navigate = useNavigate()
+  const { tab: tabParam } = useParams<{ tab: string }>()
   const { currentUser, adminUser, signOut } = useAuth()
-  const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [selectedLibrary, setSelectedLibrary] = useState<string | null>(null)
   const [selectedFloor, setSelectedFloor] = useState<string | null>(null)
+
+  const activeTab: TabType = isValidTab(tabParam) ? tabParam : 'overview'
+
+  useEffect(() => {
+    if (tabParam && !isValidTab(tabParam)) {
+      navigate('/admin/overview', { replace: true })
+    }
+  }, [tabParam, navigate])
+
+  const setActiveTab = (tab: TabType) => {
+    navigate(`/admin/${tab}`)
+  }
 
   // Fetch data for overview
   const { data: libraries, isLoading: librariesLoading } = useLibraries()

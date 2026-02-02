@@ -8,6 +8,7 @@ import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
+  getIdTokenResult,
   type User as FirebaseUser,
 } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore'
@@ -55,15 +56,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Fetch admin user data from Firestore
   const fetchAdminUser = async (uid: string) => {
-    if (!firestore) return null
+    if (!firestore) {
+      console.log('[Auth] fetchAdminUser: Firestore not initialized')
+      return null
+    }
 
     try {
-      const adminDoc = await getDoc(doc(firestore, 'admin_users', uid))
+      const adminRef = doc(firestore, 'admin_users', uid)
+      console.log('[Auth] fetchAdminUser: Querying admin_users/', uid, '(app uses "book" Firestore DB per VITE_FIRESTORE_DATABASE)')
+      const adminDoc = await getDoc(adminRef)
+      console.log('[Auth] fetchAdminUser: Document exists?', adminDoc.exists(), '| Path:', adminDoc.ref.path)
       if (adminDoc.exists()) {
-        return adminDoc.data() as AdminUser
+        const data = adminDoc.data() as AdminUser
+        console.log('[Auth] fetchAdminUser: Admin data:', { email: data?.email, role: data?.role, isActive: data?.isActive })
+        return { ...data, uid: adminDoc.id } as AdminUser
       }
+      console.log('[Auth] fetchAdminUser: No admin document found for uid:', uid)
     } catch (error) {
-      console.error('Error fetching admin user:', error)
+      console.error('[Auth] fetchAdminUser: Error fetching admin user:', error)
+    }
+    return null
+  }
+
+  // Build admin from custom claims when Firestore doc doesn't exist
+  const buildAdminFromClaims = async (user: FirebaseUser): Promise<AdminUser | null> => {
+    const tokenResult = await getIdTokenResult(user)
+    const role = tokenResult.claims.role as string | undefined
+    const isAdminClaim = tokenResult.claims.isAdmin as boolean | undefined
+    if (role && (role === 'super_admin' || role === 'admin' || role === 'librarian' || isAdminClaim)) {
+      return {
+        uid: user.uid,
+        email: user.email || '',
+        displayName: user.displayName || undefined,
+        role: role as AdminUser['role'],
+        isActive: true,
+      }
     }
     return null
   }
@@ -78,9 +105,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setCurrentUser(user)
 
       if (user) {
-        // Fetch admin user data
         const admin = await fetchAdminUser(user.uid)
-        setAdminUser(admin)
+        if (!admin) {
+          const fallback = await buildAdminFromClaims(user)
+          setAdminUser(fallback)
+        } else {
+          setAdminUser(admin)
+        }
       } else {
         setAdminUser(null)
       }
@@ -95,20 +126,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (!auth) throw new Error('Firebase Auth not initialized')
 
     try {
+      console.log('[Auth] signIn: Attempting login for', email)
       const result = await signInWithEmailAndPassword(auth, email, password)
+      console.log('[Auth] signIn: Firebase Auth success, uid:', result.user.uid, '| email:', result.user.email)
       
-      // Check if user is an admin
+      // Check if user is an admin (document in admin_users collection)
       const admin = await fetchAdminUser(result.user.uid)
+      console.log('[Auth] signIn: fetchAdminUser result:', admin ? { email: admin.email, role: admin.role } : 'null')
+      
       if (!admin) {
-        // Not an admin user, sign out
+        // Fallback: check custom claims (role, isAdmin) - admin_users doc may be in different DB
+        const tokenResult = await getIdTokenResult(result.user)
+        const role = tokenResult.claims.role as string | undefined
+        const isAdminClaim = tokenResult.claims.isAdmin as boolean | undefined
+        console.log('[Auth] signIn: Fallback - checking custom claims:', { role, isAdmin: isAdminClaim })
+        if (role && (role === 'super_admin' || role === 'admin' || role === 'librarian' || isAdminClaim)) {
+          const fallbackAdmin: AdminUser = {
+            uid: result.user.uid,
+            email: result.user.email || email,
+            displayName: result.user.displayName || undefined,
+            role: role as AdminUser['role'],
+            isActive: true,
+          }
+          console.log('[Auth] signIn: Using admin from custom claims:', fallbackAdmin.role)
+          setAdminUser(fallbackAdmin)
+          return
+        }
+        console.warn('[Auth] signIn: No admin_users document and no valid custom claims - signing out')
         await firebaseSignOut(auth)
         throw new Error('ليس لديك صلاحيات الوصول إلى لوحة التحكم')
       }
 
       if (!admin.isActive) {
+        console.warn('[Auth] signIn: Admin user is inactive')
         await firebaseSignOut(auth)
         throw new Error('حسابك غير نشط. يرجى الاتصال بالمسؤول')
       }
+      console.log('[Auth] signIn: Login successful for', admin.email)
     } catch (error: any) {
       if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
         throw new Error('البريد الإلكتروني أو كلمة المرور غير صحيحة')

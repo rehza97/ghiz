@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react'
-import { useShelves, useSaveShelf, useUpdateShelf, useShelfBooks, useBook } from '@/hooks/useFirestore'
+import { useShelves, useSaveShelf, useUpdateShelf, useShelfBooks, useBook, useAddBookToShelf, useRemoveBookFromShelf, useBooks } from '@/hooks/useFirestore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,13 +27,20 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { FillTestDataButton } from '@/components/fill-test-data-button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { BookOpen, Plus, Edit, Loader2, Box } from 'lucide-react'
+import { BookOpen, Plus, Edit, Loader2, Box, BookPlus, Trash2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import type { Shelf, CreateShelfInput, ShelfBook } from '@/types'
 
 // Component to display a shelf book with book details
-function ShelfBookItem({ shelfBook }: { shelfBook: ShelfBook }) {
+function ShelfBookItem({
+  shelfBook,
+  onRemove,
+}: {
+  shelfBook: ShelfBook
+  onRemove?: (bookIsbn: string) => void
+}) {
   const { data: book, isLoading } = useBook(shelfBook.bookIsbn)
 
   if (isLoading) {
@@ -62,7 +69,19 @@ function ShelfBookItem({ shelfBook }: { shelfBook: ShelfBook }) {
               </p>
             </div>
           </div>
-          <Badge>الموقع: {shelfBook.position}</Badge>
+          <div className="flex items-center gap-2">
+            <Badge>الموقع: {shelfBook.position}</Badge>
+            {onRemove && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-red-600 hover:text-red-700"
+                onClick={() => onRemove(shelfBook.bookIsbn)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -77,8 +96,11 @@ interface ShelfManagementProps {
 
 export function ShelfManagement({ libraryId, floorId, floorName }: ShelfManagementProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isAddBookDialogOpen, setIsAddBookDialogOpen] = useState(false)
   const [editingShelf, setEditingShelf] = useState<Shelf | null>(null)
   const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null)
+  const [addBookIsbn, setAddBookIsbn] = useState('')
+  const [addBookPosition, setAddBookPosition] = useState(1)
 
   const { data: shelves, isLoading, error } = useShelves(libraryId, floorId)
   const { data: shelfBooks } = useShelfBooks(
@@ -86,8 +108,11 @@ export function ShelfManagement({ libraryId, floorId, floorName }: ShelfManageme
     floorId,
     selectedShelfId || ''
   )
+  const { data: books } = useBooks()
   const saveShelf = useSaveShelf()
   const updateShelf = useUpdateShelf()
+  const addBookToShelf = useAddBookToShelf()
+  const removeBookFromShelf = useRemoveBookFromShelf()
 
   const {
     register,
@@ -294,24 +319,56 @@ export function ShelfManagement({ libraryId, floorId, floorName }: ShelfManageme
               <TabsContent value="details">
                 {selectedShelfId && shelfBooks ? (
                   <div className="space-y-4">
-                    <h3 className="text-lg font-semibold">
-                      الكتب على الرف ({shelfBooks.length})
-                    </h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold">
+                        الكتب على الرف ({shelfBooks.length})
+                      </h3>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setAddBookPosition((shelfBooks?.length ?? 0) + 1)
+                          setAddBookIsbn('')
+                          setIsAddBookDialogOpen(true)
+                        }}
+                        className="bg-[#38ada9] hover:bg-[#2d8a86]"
+                      >
+                        <BookPlus className="h-4 w-4 ml-2" />
+                        إضافة كتاب للرف
+                      </Button>
+                    </div>
                     {shelfBooks.length === 0 ? (
                       <p className="text-gray-500 text-center py-8">
-                        لا توجد كتب على هذا الرف
+                        لا توجد كتب على هذا الرف. انقر "إضافة كتاب للرف" لإضافة كتب من الفهرس.
                       </p>
                     ) : (
                       <div className="grid gap-2">
                         {shelfBooks.map((shelfBook) => (
-                          <ShelfBookItem key={shelfBook.bookIsbn} shelfBook={shelfBook} />
+                          <ShelfBookItem
+                            key={shelfBook.bookIsbn}
+                            shelfBook={shelfBook}
+                            onRemove={async (bookIsbn) => {
+                              if (confirm('إزالة هذا الكتاب من الرف؟')) {
+                                try {
+                                  await removeBookFromShelf.mutateAsync({
+                                    libraryId,
+                                    floorId,
+                                    shelfId: selectedShelfId,
+                                    bookIsbn,
+                                  })
+                                } catch (e) {
+                                  console.error(e)
+                                  alert('فشل في إزالة الكتاب')
+                                }
+                              }
+                            }}
+                          />
                         ))}
                       </div>
                     )}
                   </div>
                 ) : (
                   <p className="text-gray-500 text-center py-8">
-                    اختر رفًا لعرض تفاصيله
+                    اختر رفًا لعرض تفاصيله وإضافة الكتب
                   </p>
                 )}
               </TabsContent>
@@ -324,9 +381,28 @@ export function ShelfManagement({ libraryId, floorId, floorName }: ShelfManageme
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[600px]" dir="rtl">
           <DialogHeader>
-            <DialogTitle>
-              {editingShelf ? 'تعديل الرف' : 'إضافة رف جديد'}
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle>
+                {editingShelf ? 'تعديل الرف' : 'إضافة رف جديد'}
+              </DialogTitle>
+              <FillTestDataButton
+                formKey="shelf"
+                onFill={(data) => {
+                  reset({
+                    name: String(data.name ?? ''),
+                    x: Number(data.x ?? 0),
+                    y: Number(data.y ?? 0),
+                    z: Number(data.z ?? 0),
+                    width: Number(data.width ?? 100),
+                    height: Number(data.height ?? 200),
+                    depth: Number(data.depth ?? 30),
+                    capacity: Number(data.capacity ?? 50),
+                    category: String(data.category ?? ''),
+                    description: String(data.description ?? ''),
+                  })
+                }}
+              />
+            </div>
             <DialogDescription>
               {editingShelf
                 ? 'قم بتعديل معلومات الرف'
@@ -479,6 +555,106 @@ export function ShelfManagement({ libraryId, floorId, floorName }: ShelfManageme
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Book to Shelf Dialog */}
+      <Dialog open={isAddBookDialogOpen} onOpenChange={setIsAddBookDialogOpen}>
+        <DialogContent className="sm:max-w-[450px]" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>إضافة كتاب للرف</DialogTitle>
+            <DialogDescription>
+              اختر كتاباً من الفهرس وأدخل موقعه على الرف. يجب أن يكون الكتاب مضافاً مسبقاً في قسم الكتب.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="addBookIsbn">اختر الكتاب من الفهرس</Label>
+              <select
+                id="addBookIsbn"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                value={addBookIsbn}
+                onChange={(e) => setAddBookIsbn(e.target.value)}
+              >
+                <option value="">-- اختر كتابًا --</option>
+                {books?.map((b) => (
+                  <option key={b.isbn} value={b.isbn}>
+                    {b.title} ({b.isbn})
+                  </option>
+                ))}
+              </select>
+              {(!books || books.length === 0) && (
+                <p className="text-xs text-amber-600">
+                  لا توجد كتب في الفهرس. أضف كتباً من قسم الكتب أولاً.
+                </p>
+              )}
+              <Label className="mt-2">أو أدخل ISBN يدوياً</Label>
+              <Input
+                placeholder="978-2-07-036002-4"
+                value={addBookIsbn}
+                onChange={(e) => setAddBookIsbn(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="addBookPosition">الموقع على الرف</Label>
+              <Input
+                id="addBookPosition"
+                type="number"
+                min={1}
+                value={addBookPosition}
+                onChange={(e) => setAddBookPosition(parseInt(e.target.value, 10) || 1)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsAddBookDialogOpen(false)}
+            >
+              إلغاء
+            </Button>
+            <Button
+              className="bg-[#38ada9] hover:bg-[#2d8a86]"
+              disabled={!addBookIsbn.trim() || addBookToShelf.isPending}
+              onClick={async () => {
+                const isbn = addBookIsbn.trim()
+                const exists = books?.some((b) => b.isbn === isbn)
+                if (!exists) {
+                  alert('الكتاب غير موجود في الفهرس. أضف الكتاب أولاً من قسم الكتب.')
+                  return
+                }
+                const alreadyOnShelf = shelfBooks?.some((b) => b.bookIsbn === isbn)
+                if (alreadyOnShelf) {
+                  alert('الكتاب موجود مسبقاً على هذا الرف.')
+                  return
+                }
+                try {
+                  await addBookToShelf.mutateAsync({
+                    libraryId,
+                    floorId,
+                    shelfId: selectedShelfId!,
+                    bookIsbn: isbn,
+                    position: addBookPosition,
+                  })
+                  setIsAddBookDialogOpen(false)
+                  setAddBookIsbn('')
+                  setAddBookPosition((shelfBooks?.length ?? 0) + 2)
+                } catch (e) {
+                  console.error(e)
+                  alert('فشل في إضافة الكتاب للرف')
+                }
+              }}
+            >
+              {addBookToShelf.isPending ? (
+                <>
+                  <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                  جاري الإضافة...
+                </>
+              ) : (
+                'إضافة'
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -29,6 +29,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { FillTestDataButton } from '@/components/fill-test-data-button'
 import { Building2, Plus, Edit, Layers, Loader2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import type { Floor, CreateFloorInput } from '@/types'
@@ -240,9 +241,24 @@ export function FloorManagement({ libraryId, libraryName, onFloorSelect }: Floor
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[500px]" dir="rtl">
           <DialogHeader>
-            <DialogTitle>
-              {editingFloor ? 'تعديل الطابق' : 'إضافة طابق جديد'}
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle>
+                {editingFloor ? 'تعديل الطابق' : 'إضافة طابق جديد'}
+              </DialogTitle>
+              <FillTestDataButton
+                formKey="floor"
+                onFill={(data) => {
+                  reset({
+                    name: String(data.name ?? ''),
+                    floorNumber: Number(data.floorNumber ?? 1),
+                    description: String(data.description ?? ''),
+                    mapWidth: Number(data.mapWidth ?? 1000),
+                    mapHeight: Number(data.mapHeight ?? 1000),
+                    mapUrl: String(data.mapUrl ?? ''),
+                  })
+                }}
+              />
+            </div>
             <DialogDescription>
               {editingFloor
                 ? 'قم بتعديل معلومات الطابق'

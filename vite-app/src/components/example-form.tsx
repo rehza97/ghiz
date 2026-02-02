@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { FillTestDataButton } from "@/components/fill-test-data-button"
 
 // Zod schema for form validation
 const formSchema = z.object({
@@ -34,6 +35,7 @@ export function ExampleForm() {
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -49,10 +51,15 @@ export function ExampleForm() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle>Example Form with Zod Validation</CardTitle>
-        <CardDescription>
-          This form uses React Hook Form with Zod for validation
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Example Form with Zod Validation</CardTitle>
+            <CardDescription>
+              This form uses React Hook Form with Zod for validation
+            </CardDescription>
+          </div>
+          <FillTestDataButton formKey="example" onFill={(data) => reset(data)} />
+        </div>
       </CardHeader>
       <form onSubmit={handleSubmit(onSubmit)}>
         <CardContent className="space-y-4">

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { FillTestDataButton } from '@/components/fill-test-data-button'
 import {
   Library,
   Building2,
@@ -121,7 +122,21 @@ export function LibraryManagement() {
       {showAddForm && (
         <Card>
           <CardHeader>
-            <CardTitle>{editingLibrary ? 'تعديل المكتبة' : 'إضافة مكتبة جديدة'}</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>{editingLibrary ? 'تعديل المكتبة' : 'إضافة مكتبة جديدة'}</CardTitle>
+              <FillTestDataButton
+                formKey="library"
+                onFill={(data) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    ...data,
+                    floorCount: Number(data.floorCount) ?? prev.floorCount,
+                    latitude: Number(data.latitude) ?? prev.latitude,
+                    longitude: Number(data.longitude) ?? prev.longitude,
+                  }))
+                }
+              />
+            </div>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">

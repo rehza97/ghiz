@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { FillTestDataButton } from '@/components/fill-test-data-button'
 import { BookOpen, Plus, Edit, Trash2, Search, Loader2, Filter } from 'lucide-react'
 import type { CreateBookInput } from '@/types'
 
@@ -104,7 +105,20 @@ export function BooksManagement() {
       {showAddForm && (
         <Card>
           <CardHeader>
-            <CardTitle>{editingBook ? 'تعديل الكتاب' : 'إضافة كتاب جديد'}</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>{editingBook ? 'تعديل الكتاب' : 'إضافة كتاب جديد'}</CardTitle>
+              <FillTestDataButton
+                formKey="book"
+                onFill={(data) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    ...data,
+                    pageCount: data.pageCount ? Number(data.pageCount) : undefined,
+                    language: (data.language as string) || 'fr',
+                  }))
+                }
+              />
+            </div>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">

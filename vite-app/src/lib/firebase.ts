@@ -2,6 +2,7 @@ import { initializeApp, getApps } from "firebase/app";
 import { getDatabase, connectDatabaseEmulator } from "firebase/database";
 import { getAuth, connectAuthEmulator } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
 // Firebase configuration
 const firebaseConfig = {
@@ -36,6 +37,7 @@ if (getApps().length === 0) {
 let database: ReturnType<typeof getDatabase> | null = null;
 let auth: ReturnType<typeof getAuth> | null = null;
 let firestore: ReturnType<typeof getFirestore> | null = null;
+let functions: ReturnType<typeof getFunctions> | null = null;
 
 try {
   // Initialize Realtime Database (only if databaseURL is configured)
@@ -102,9 +104,25 @@ try {
   } catch (firestoreError) {
     console.error("Firestore initialization error:", firestoreError);
   }
+
+  try {
+    functions = getFunctions(app, "europe-west1");
+    if (
+      import.meta.env.DEV &&
+      import.meta.env.VITE_USE_FIREBASE_EMULATOR === "true"
+    ) {
+      try {
+        connectFunctionsEmulator(functions, "localhost", 5001);
+      } catch (emulatorError) {
+        console.warn("Functions emulator connection:", emulatorError);
+      }
+    }
+  } catch (functionsError) {
+    console.error("Functions initialization error:", functionsError);
+  }
 } catch (error) {
   console.error("Firebase initialization error:", error);
 }
 
-export { app, database, auth, firestore };
+export { app, database, auth, firestore, functions };
 export default app;

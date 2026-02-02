@@ -207,6 +207,79 @@ export function useShelfBooks(libraryId: string, floorId: string, shelfId: strin
   })
 }
 
+export function useAddBookToShelf() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      libraryId,
+      floorId,
+      shelfId,
+      bookIsbn,
+      position,
+    }: {
+      libraryId: string
+      floorId: string
+      shelfId: string
+      bookIsbn: string
+      position: number
+    }) =>
+      FirestoreService.Shelf.addBookToShelf(
+        libraryId,
+        floorId,
+        shelfId,
+        bookIsbn,
+        position
+      ),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['shelfBooks', variables.libraryId, variables.floorId, variables.shelfId],
+      })
+      queryClient.invalidateQueries({
+        queryKey: ['shelves', variables.libraryId, variables.floorId],
+      })
+      queryClient.invalidateQueries({
+        queryKey: ['shelf', variables.libraryId, variables.floorId, variables.shelfId],
+      })
+    },
+  })
+}
+
+export function useRemoveBookFromShelf() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      libraryId,
+      floorId,
+      shelfId,
+      bookIsbn,
+    }: {
+      libraryId: string
+      floorId: string
+      shelfId: string
+      bookIsbn: string
+    }) =>
+      FirestoreService.Shelf.removeBookFromShelf(
+        libraryId,
+        floorId,
+        shelfId,
+        bookIsbn
+      ),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['shelfBooks', variables.libraryId, variables.floorId, variables.shelfId],
+      })
+      queryClient.invalidateQueries({
+        queryKey: ['shelves', variables.libraryId, variables.floorId],
+      })
+      queryClient.invalidateQueries({
+        queryKey: ['shelf', variables.libraryId, variables.floorId, variables.shelfId],
+      })
+    },
+  })
+}
+
 // ==================== Books ====================
 
 export function useBooks(categoryFilter?: string) {

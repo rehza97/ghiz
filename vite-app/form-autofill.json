@@ -1,0 +1,156 @@
+{
+  "$schema": "Form auto-fill configuration for vite-app",
+  "description": "Sample values with many variations for testing - each Fill click picks a random variation",
+  "forms": {
+    "login": {
+      "page": "/login",
+      "component": "LoginPage",
+      "inputs": {
+        "email": { "id": "email", "name": "email", "type": "email", "value": "admin@library.dz" },
+        "password": { "id": "password", "name": "password", "type": "password", "value": "Password123!" }
+      },
+      "variations": [
+        { "email": "admin@library.dz", "password": "Password123!" },
+        { "email": "super_admin@library.dz", "password": "SuperAdmin456!" },
+        { "email": "librarian@library.dz", "password": "LibPass789!" },
+        { "email": "admin@oran-library.dz", "password": "OranAdmin2024!" },
+        { "email": "admin@constantine.dz", "password": "Const123!" },
+        { "email": "root@library.dz", "password": "RootSecure99!" }
+      ]
+    },
+    "library": {
+      "page": "/admin",
+      "component": "LibraryManagement",
+      "tab": "libraries",
+      "inputs": {
+        "name": { "id": "name", "value": "مكتبة المركز الثقافي" },
+        "city": { "id": "city", "value": "الجزائر" },
+        "wilaya": { "id": "wilaya", "value": "الجزائر" },
+        "address": { "id": "address", "value": "شارع ديدوش مراد 25" }
+      },
+      "variations": [
+        { "name": "مكتبة المركز الثقافي", "city": "الجزائر", "wilaya": "الجزائر", "address": "شارع ديدوش مراد 25", "postalCode": "16000", "phone": "+213 21 123456", "email": "contact@library.dz", "floorCount": 3, "hours": "الأحد-الخميس: 8ص-5م", "latitude": 36.7538, "longitude": 3.0588, "description": "مكتبة عامة في قلب العاصمة" },
+        { "name": "مكتبة وهران الجهوية", "city": "وهران", "wilaya": "وهران", "address": "شارع الاستقلال 12", "postalCode": "31000", "phone": "+213 41 456789", "email": "info@oran-library.dz", "floorCount": 2, "hours": "السبت-الخميس: 9ص-6م", "latitude": 35.6969, "longitude": -0.6331, "description": "مكتبة جهوية في مدينة وهران" },
+        { "name": "مكتبة قسنطينة", "city": "قسنطينة", "wilaya": "قسنطينة", "address": "شارع العربي بن مهيدي 8", "postalCode": "25000", "phone": "+213 31 789012", "email": "contact@constantine-library.dz", "floorCount": 4, "hours": "الأحد-الخميس: 8ص-5م", "latitude": 36.3650, "longitude": 6.6147, "description": "مكتبة تاريخية في مدينة الجسور المعلقة" },
+        { "name": "مكتبة عنابة", "city": "عنابة", "wilaya": "عنابة", "address": "شارع الاستقلال 45", "postalCode": "23000", "phone": "+213 38 123456", "email": "bib.annaba@library.dz", "floorCount": 2, "hours": "السبت-الخميس: 9ص-5م", "latitude": 36.9, "longitude": 7.7667, "description": "مكتبة ساحلية في عنابة" },
+        { "name": "مكتبة باتنة", "city": "باتنة", "wilaya": "باتنة", "address": "شارع أول نوفمبر 22", "postalCode": "05000", "phone": "+213 33 654321", "email": "batna@library.dz", "floorCount": 2, "hours": "الأحد-الخميس: 8ص-4م", "latitude": 35.5559, "longitude": 6.1741, "description": "مكتبة في عاصمة الأوراس" },
+        { "name": "مكتبة سطيف", "city": "سطيف", "wilaya": "سطيف", "address": "شارع الاستقلال 100", "postalCode": "19000", "phone": "+213 36 987654", "email": "setif@library.dz", "floorCount": 3, "hours": "السبت-الخميس: 8ص-6م", "latitude": 36.1911, "longitude": 5.4137, "description": "مكتبة في عاصمة المرتفعات العليا" },
+        { "name": "مكتبة تلمسان", "city": "تلمسان", "wilaya": "تلمسان", "address": "شارع بن مخلوف 15", "postalCode": "13000", "phone": "+213 43 112233", "email": "tlemcen@library.dz", "floorCount": 2, "hours": "الأحد-الخميس: 9ص-5م", "latitude": 34.8781, "longitude": -1.3150, "description": "مكتبة في مدينة الفن والتاريخ" },
+        { "name": "مكتبة بجاية", "city": "بجاية", "wilaya": "بجاية", "address": "شارع الجمهورية 7", "postalCode": "06000", "phone": "+213 34 445566", "email": "bejaia@library.dz", "floorCount": 2, "hours": "السبت-الخميس: 8ص-5م", "latitude": 36.7525, "longitude": 5.0558, "description": "مكتبة على ساحل القبائل" },
+        { "name": "Bibliothèque Nationale d'Algérie", "city": "الجزائر", "wilaya": "الجزائر", "address": "1 Place Audin", "postalCode": "16000", "phone": "+213 21 987654", "email": "contact@bna.dz", "floorCount": 5, "hours": "الأحد-الخميس: 9ص-6م", "latitude": 36.7500, "longitude": 3.0500, "description": "المكتبة الوطنية الجزائرية" }
+      ]
+    },
+    "book": {
+      "page": "/admin",
+      "component": "BooksManagement",
+      "tab": "books",
+      "inputs": {},
+      "variations": [
+        { "isbn": "978-2-07-036002-4", "title": "الأمير الصغير", "author": "أنطوان دو سانت إكزوبيري", "category": "أدب", "language": "ar", "publisher": "غاليمار", "publishDate": "1943", "pageCount": 96, "coverUrl": "", "description": "رواية كلاسيكية للأطفال والكبار" },
+        { "isbn": "978-9961-64-112-3", "title": "ذاكرة الماء", "author": "الطاهر وطار", "category": "أدب", "language": "ar", "publisher": "الشركة الوطنية للنشر", "publishDate": "1984", "pageCount": 256, "coverUrl": "", "description": "رواية جزائرية كلاسيكية" },
+        { "isbn": "978-9947-21-123-4", "title": "النجم والاستعمار", "author": "مولود معمري", "category": "أدب", "language": "ar", "publisher": "منشورات الحوار", "publishDate": "1963", "pageCount": 320, "coverUrl": "", "description": "رواية أمازيغية في الأدب الجزائري" },
+        { "isbn": "978-2-07-041324-1", "title": "L'Étranger", "author": "Albert Camus", "category": "أدب", "language": "fr", "publisher": "غاليمار", "publishDate": "1942", "pageCount": 158, "coverUrl": "", "description": "رواية فلسفية للكاتب الجزائري الفرنسي" },
+        { "isbn": "978-0-262-03293-3", "title": "Introduction to Algorithms", "author": "Cormen et al.", "category": "علوم حاسوب", "language": "en", "publisher": "MIT Press", "publishDate": "2009", "pageCount": 1292, "coverUrl": "", "description": "كتاب مرجعي في الخوارزميات" },
+        { "isbn": "978-9947-21-456-7", "title": "تاريخ الجزائر المعاصر", "author": "محمد الهادي الشريف", "category": "تاريخ", "language": "ar", "publisher": "ديوان المطبوعات الجامعية", "publishDate": "2002", "pageCount": 450, "coverUrl": "", "description": "تاريخ الجزائر من الفتح الإسلامي إلى الاستقلال" },
+        { "isbn": "978-2-13-058247-8", "title": "Physique Quantique", "author": "Claude Cohen-Tannoudji", "category": "علوم", "language": "fr", "publisher": "Dunod", "publishDate": "1997", "pageCount": 1524, "coverUrl": "", "description": "كتاب مرجعي في الفيزياء الكمومية" },
+        { "isbn": "978-9947-21-789-0", "title": "قصص للأطفال", "author": "محمد الصالح الصديق", "category": "أطفال", "language": "ar", "publisher": "منشورات المتوسط", "publishDate": "2010", "pageCount": 48, "coverUrl": "", "description": "مجموعة قصص تربوية للأطفال" },
+        { "isbn": "978-2-08-121810-9", "title": "Le Petit Larousse Illustré", "author": "Collectif", "category": "مراجع", "language": "fr", "publisher": "Larousse", "publishDate": "2023", "pageCount": 2048, "coverUrl": "", "description": "قاموس وموسوعة مصورة" },
+        { "isbn": "978-9947-21-321-5", "title": "الشعر العربي الحديث", "author": "عبد القاهر الجرجاني", "category": "شعر", "language": "ar", "publisher": "دار المعرفة", "publishDate": "1995", "pageCount": 280, "coverUrl": "", "description": "دراسة في الشعر العربي الحديث" }
+      ]
+    },
+    "floor": {
+      "page": "/admin",
+      "component": "FloorManagement",
+      "tab": "floors",
+      "inputs": {},
+      "variations": [
+        { "name": "الطابق الأول", "floorNumber": 1, "description": "طابق الكتب العامة", "mapWidth": 2048, "mapHeight": 2048, "mapUrl": "" },
+        { "name": "الطابق الثاني", "floorNumber": 2, "description": "طابق العلوم والتكنولوجيا", "mapWidth": 2048, "mapHeight": 2048, "mapUrl": "" },
+        { "name": "الطابق الأرضي", "floorNumber": 0, "description": "المكتبة للجميع - مدخل رئيسي", "mapWidth": 1024, "mapHeight": 1024, "mapUrl": "" },
+        { "name": "الطابق الثالث", "floorNumber": 3, "description": "قسم الأدب والفنون", "mapWidth": 1536, "mapHeight": 1536, "mapUrl": "" },
+        { "name": "الطابق السفلي", "floorNumber": -1, "description": "المستودعات والأرشيف", "mapWidth": 2048, "mapHeight": 2048, "mapUrl": "" },
+        { "name": "RDC - Rez-de-chaussée", "floorNumber": 0, "description": "Accueil et prêt", "mapWidth": 1000, "mapHeight": 1000, "mapUrl": "" },
+        { "name": "الطابق الرابع", "floorNumber": 4, "description": "قسم المخطوطات والنادرة", "mapWidth": 1024, "mapHeight": 1024, "mapUrl": "" }
+      ]
+    },
+    "shelf": {
+      "page": "/admin",
+      "component": "ShelfManagement",
+      "tab": "shelves",
+      "inputs": {},
+      "variations": [
+        { "name": "رف أ-1", "x": 0, "y": 0, "z": 0, "width": 100, "height": 200, "depth": 30, "capacity": 50, "category": "علوم", "description": "" },
+        { "name": "رف ب-2", "x": 120, "y": 0, "z": 0, "width": 100, "height": 180, "depth": 25, "capacity": 45, "category": "أدب", "description": "أدب عربي" },
+        { "name": "رف ج-3", "x": 240, "y": 0, "z": 0, "width": 80, "height": 150, "depth": 20, "capacity": 30, "category": "تاريخ", "description": "" },
+        { "name": "Rayon A1", "x": 0, "y": 0, "z": 0, "width": 120, "height": 220, "depth": 35, "capacity": 60, "category": "Sciences", "description": "Physique et chimie" },
+        { "name": "رف الأطفال", "x": 50, "y": 0, "z": 0, "width": 60, "height": 120, "depth": 20, "capacity": 25, "category": "أطفال", "description": "كتب مصورة للأطفال" },
+        { "name": "رف المراجع", "x": 400, "y": 0, "z": 0, "width": 100, "height": 200, "depth": 40, "capacity": 40, "category": "مراجع", "description": "موسوعات وقواميس" },
+        { "name": "Rayon Littérature", "x": 150, "y": 0, "z": 0, "width": 90, "height": 190, "depth": 28, "capacity": 48, "category": "Littérature", "description": "" },
+        { "name": "رف التقنية", "x": 300, "y": 0, "z": 0, "width": 100, "height": 200, "depth": 30, "capacity": 55, "category": "تقنية", "description": "علوم حاسوب وبرمجة" }
+      ]
+    },
+    "user": {
+      "page": "/admin",
+      "component": "UserManagement",
+      "tab": "users",
+      "inputs": {},
+      "variations": [
+        { "email": "librarian@library.dz", "password": "Password123!", "displayName": "أحمد بن علي", "role": "librarian", "libraryId": "lib_001" },
+        { "email": "admin@oran.dz", "password": "AdminOran789!", "displayName": "فاطمة الزهراء", "role": "admin", "libraryId": "lib_002" },
+        { "email": "super@library.dz", "password": "SuperSecure123!", "displayName": "محمد الأمين", "role": "super_admin", "libraryId": "" },
+        { "email": "karim.librarian@library.dz", "password": "Lib2024!", "displayName": "كريم بن صالح", "role": "librarian", "libraryId": "lib_001" },
+        { "email": "admin@constantine.dz", "password": "ConstAdmin456!", "displayName": "ليلى بن يوسف", "role": "admin", "libraryId": "lib_003" },
+        { "email": "assistant@library.dz", "password": "Assistant99!", "displayName": "سارة محمد", "role": "librarian", "libraryId": "lib_001" },
+        { "email": "directeur@bna.dz", "password": "DirBNA2024!", "displayName": "عبد الرحمن شريف", "role": "admin", "libraryId": "lib_main" }
+      ]
+    },
+    "example": {
+      "page": "/admin",
+      "component": "ExampleForm",
+      "inputs": {},
+      "variations": [
+        { "name": "John Doe", "email": "john@example.com", "age": 25 },
+        { "name": "Jane Smith", "email": "jane.smith@test.com", "age": 32 },
+        { "name": "أحمد محمد", "email": "ahmed@library.dz", "age": 28 },
+        { "name": "Marie Dupont", "email": "marie.dupont@email.fr", "age": 45 },
+        { "name": "Alice Johnson", "email": "alice.j@company.com", "age": 22 },
+        { "name": "محمد بن علي", "email": "mohamed@test.dz", "age": 35 }
+      ]
+    },
+    "analytics": {
+      "page": "/admin",
+      "component": "AnalyticsDashboard",
+      "tab": "analytics",
+      "inputs": {},
+      "variations": []
+    }
+  },
+  "flatInputMap": {
+    "email": "admin@library.dz",
+    "password": "Password123!",
+    "name": "مثال",
+    "city": "الجزائر",
+    "wilaya": "الجزائر",
+    "address": "شارع مثال 1",
+    "postalCode": "16000",
+    "phone": "+213 21 123456",
+    "floorCount": 2,
+    "latitude": 36.7538,
+    "longitude": 3.0588,
+    "isbn": "978-2-07-036002-4",
+    "title": "عنوان الكتاب",
+    "author": "اسم المؤلف",
+    "category": "أدب",
+    "language": "ar",
+    "publisher": "دار النشر",
+    "publishDate": "2020",
+    "pageCount": 200,
+    "displayName": "محمد أحمد",
+    "role": "admin"
+  },
+  "usage": {
+    "browserExtension": "Match input id or name to flatInputMap",
+    "testing": "Each Fill click picks a random variation for variety",
+    "variations": "forms.<formKey>.variations[] - pick random for diverse test data"
+  }
+}

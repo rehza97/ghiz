@@ -10,11 +10,11 @@ class BookCorrectionScreen extends StatefulWidget {
   final String libraryId;
 
   const BookCorrectionScreen({
-    Key? key,
+    super.key,
     required this.correctionGuide,
     required this.shelfId,
     required this.libraryId,
-  }) : super(key: key);
+  });
 
   @override
   State<BookCorrectionScreen> createState() => _BookCorrectionScreenState();

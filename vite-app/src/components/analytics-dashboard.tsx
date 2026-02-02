@@ -37,6 +37,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { FillTestDataButton } from "@/components/fill-test-data-button";
 
 interface AnalyticsDashboardProps {
   libraryId?: string;
@@ -144,10 +145,21 @@ export function AnalyticsDashboard({ libraryId }: AnalyticsDashboardProps) {
       {/* Date Range Filter */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-[#38ada9]" />
-            فترة التحليل
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-[#38ada9]" />
+              فترة التحليل
+            </CardTitle>
+            <FillTestDataButton
+              formKey="analytics"
+              onFill={() => {
+                const today = new Date();
+                const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+                setStartDate(lastWeek.toISOString().split("T")[0]);
+                setEndDate(today.toISOString().split("T")[0]);
+              }}
+            />
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

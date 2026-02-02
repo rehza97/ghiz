@@ -46,25 +46,6 @@ flutter {
 }
 
 dependencies {
-    // Import the Firebase BoM
-    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
-    
-    // Add the dependencies for Firebase products you want to use
-    // When using the BoM, don't specify versions in Firebase dependencies
-    // https://firebase.google.com/docs/android/setup#available-libraries
-    
-    // Firebase Core (required)
-    implementation("com.google.firebase:firebase-core")
-    
-    // Cloud Firestore
-    implementation("com.google.firebase:firebase-firestore")
-    
-    // Firebase Authentication
-    implementation("com.google.firebase:firebase-auth")
-    
-    // Firebase Storage
-    implementation("com.google.firebase:firebase-storage")
-    
-    // Firebase Analytics
-    implementation("com.google.firebase:firebase-analytics")
+    // Firebase native deps are added automatically by Flutter Firebase plugins
+    // (cloud_firestore, etc.) - no manual implementation() needed
 }

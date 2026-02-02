@@ -38,12 +38,10 @@ export function FirebaseStatus() {
         } else {
           setStatus(prev => ({ ...prev, database: 'disconnected' }))
         }
-        unsubscribe()
         off(testRef)
       }, (error) => {
         console.error('Database connection error:', error)
         setStatus(prev => ({ ...prev, database: 'error' }))
-        unsubscribe()
         off(testRef)
       })
 
@@ -76,12 +74,12 @@ export function FirebaseStatus() {
         auth,
         () => {
           setStatus(prev => ({ ...prev, auth: 'connected' }))
-          unsubscribe()
+          setTimeout(() => unsubscribe(), 0)
         },
         (error) => {
           console.error('Auth connection error:', error)
           setStatus(prev => ({ ...prev, auth: 'error' }))
-          unsubscribe()
+          setTimeout(() => unsubscribe(), 0)
         }
       )
 

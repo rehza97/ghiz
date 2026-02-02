@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { Button } from '@/components/ui/button'
+import { FillTestDataButton } from '@/components/fill-test-data-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -30,6 +31,7 @@ export function LoginPage() {
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -106,6 +108,13 @@ export function LoginPage() {
                   </p>
                 )}
               </div>
+
+              {/* Fill test data - for easy testing */}
+              <FillTestDataButton
+                formKey="login"
+                onFill={(data) => reset(data as LoginFormValues)}
+                className="mb-2"
+              />
 
               {/* Password Field */}
               <div className="space-y-2">

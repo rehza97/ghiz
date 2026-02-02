@@ -50,10 +50,10 @@ class ARBookDetectionScreen extends StatefulWidget {
   final String libraryId;
 
   const ARBookDetectionScreen({
-    Key? key,
+    super.key,
     required this.shelfId,
     required this.libraryId,
-  }) : super(key: key);
+  });
 
   @override
   State<ARBookDetectionScreen> createState() => _ARBookDetectionScreenState();
@@ -73,8 +73,8 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
   List<BookARData> _arDataList = [];
   BookCorrectionGuide? _correctionGuide;
 
-  bool _isScanning = true;
-  double _distanceToShelf = 2.0; // Distance simulée
+  final bool _isScanning = true;
+  final double _distanceToShelf = 2.0; // Distance simulée
   String _scanStatus = 'Pointez la caméra vers le rayon';
   bool _isFocusing = false;
   Offset? _focusPoint;
@@ -1058,8 +1058,8 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: _correctionGuide!.isInCorrectOrder
-                    ? Colors.green.withOpacity(0.3)
-                    : Colors.orange.withOpacity(0.3),
+                    ? Colors.green.withValues(alpha: 0.3)
+                    : Colors.orange.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: _correctionGuide!.isInCorrectOrder

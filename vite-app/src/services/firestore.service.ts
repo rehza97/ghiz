@@ -11,6 +11,7 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  deleteDoc,
   query,
   where,
   orderBy,
@@ -232,13 +233,18 @@ export class FloorService {
         ...data,
         id: floorId,
         libraryId,
-        mapUrl: data.mapAssetPath, // Copy mapAssetPath to mapUrl
+        mapUrl: data.mapUrl ?? data.mapAssetPath ?? '',
         isActive: true,
         createdAt: timestamp,
         updatedAt: timestamp,
       };
 
-      await setDoc(docRef, floorData, { merge: true });
+      // Firestore rejects undefined - strip undefined values
+      const sanitized = Object.fromEntries(
+        Object.entries(floorData).filter(([, v]) => v !== undefined)
+      );
+
+      await setDoc(docRef, sanitized, { merge: true });
     } catch (error) {
       console.error("Error saving floor:", error);
       throw new Error(`Failed to save floor: ${error}`);
@@ -257,11 +263,11 @@ export class FloorService {
 
     try {
       const docRef = doc(firestore, `libraries/${libraryId}/floors`, floorId);
-
-      await updateDoc(docRef, {
-        ...data,
-        updatedAt: getTimestamp(),
-      });
+      const updateData = { ...data, updatedAt: getTimestamp() };
+      const sanitized = Object.fromEntries(
+        Object.entries(updateData).filter(([, v]) => v !== undefined)
+      );
+      await updateDoc(docRef, sanitized);
     } catch (error) {
       console.error("Error updating floor:", error);
       throw new Error(`Failed to update floor: ${error}`);
@@ -425,6 +431,98 @@ export class ShelfService {
       throw new Error(`Failed to fetch shelf books: ${error}`);
     }
   }
+
+  /**
+   * Add a book to a shelf
+   */
+  static async addBookToShelf(
+    libraryId: string,
+    floorId: string,
+    shelfId: string,
+    bookIsbn: string,
+    position: number
+  ): Promise<void> {
+    if (!firestore) throw new Error("Firestore not initialized");
+
+    try {
+      const bookRef = doc(
+        firestore,
+        `libraries/${libraryId}/floors/${floorId}/shelves/${shelfId}/books`,
+        bookIsbn
+      );
+      const timestamp = getTimestamp();
+
+      await setDoc(bookRef, {
+        bookIsbn,
+        position,
+        expectedPosition: position,
+        isCorrectOrder: true,
+        isFlagged: false,
+        misplacementCount: 0,
+        addedAt: timestamp,
+        updatedAt: timestamp,
+      });
+
+      // Update shelf currentCount
+      const shelfRef = doc(
+        firestore,
+        `libraries/${libraryId}/floors/${floorId}/shelves`,
+        shelfId
+      );
+      const shelfSnap = await getDoc(shelfRef);
+      if (shelfSnap.exists()) {
+        const shelf = shelfSnap.data();
+        const currentCount = (shelf.currentCount ?? 0) + 1;
+        await updateDoc(shelfRef, {
+          currentCount,
+          updatedAt: timestamp,
+        });
+      }
+    } catch (error) {
+      console.error("Error adding book to shelf:", error);
+      throw new Error(`Failed to add book to shelf: ${error}`);
+    }
+  }
+
+  /**
+   * Remove a book from a shelf
+   */
+  static async removeBookFromShelf(
+    libraryId: string,
+    floorId: string,
+    shelfId: string,
+    bookIsbn: string
+  ): Promise<void> {
+    if (!firestore) throw new Error("Firestore not initialized");
+
+    try {
+      const bookRef = doc(
+        firestore,
+        `libraries/${libraryId}/floors/${floorId}/shelves/${shelfId}/books`,
+        bookIsbn
+      );
+      await deleteDoc(bookRef);
+
+      // Update shelf currentCount
+      const shelfRef = doc(
+        firestore,
+        `libraries/${libraryId}/floors/${floorId}/shelves`,
+        shelfId
+      );
+      const shelfSnap = await getDoc(shelfRef);
+      if (shelfSnap.exists()) {
+        const shelf = shelfSnap.data();
+        const currentCount = Math.max(0, (shelf.currentCount ?? 1) - 1);
+        await updateDoc(shelfRef, {
+          currentCount,
+          updatedAt: getTimestamp(),
+        });
+      }
+    } catch (error) {
+      console.error("Error removing book from shelf:", error);
+      throw new Error(`Failed to remove book from shelf: ${error}`);
+    }
+  }
 }
 
 // ==================== Books ====================
@@ -574,7 +672,7 @@ export class BookService {
 // ==================== Book Locations ====================
 
 export class BookLocationService {
-  private static collectionPath = "bookLocations";
+  private static collectionPath = "book_locations";
 
   /**
    * Get book locations by library
