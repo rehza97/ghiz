@@ -70,8 +70,10 @@ export function LandingPage() {
 
   const androidDownloadUrl =
     "https://play.google.com/store/apps/details?id=com.ghiz.bookscanner";
+  const androidApkDirectUrl =
+    "https://github.com/rehza97/ghiz/raw/main/flutter_application_1/build/app/outputs/flutter-apk/app-release.apk";
   const iosDownloadUrl = "https://apps.apple.com/app/id123456789";
-  const qrCodeValue = androidDownloadUrl;
+  const qrCodeValue = androidApkDirectUrl;
 
   return (
     <div dir="rtl" className="min-h-screen bg-white dark:bg-gray-900">
