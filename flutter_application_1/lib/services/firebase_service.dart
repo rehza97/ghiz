@@ -1,13 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import '../models/library.dart';
 import '../models/floor.dart';
 import '../models/shelf.dart';
 import '../models/book.dart';
 import '../models/book_location.dart';
 
-/// Service pour interagir avec Firebase Firestore
+/// Service pour interagir avec Firebase Firestore (base "book" comme le dashboard web)
 class FirebaseService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static FirebaseFirestore get _firestore => FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: 'book',
+      );
 
   // ==================== Libraries ====================
 
@@ -124,6 +128,21 @@ class FirebaseService {
     }
   }
 
+  /// Récupère un rayon par libraryId et shelfId (sans floorId) en parcourant les étages
+  Future<Shelf?> getShelfByLibraryAndShelfId(String libraryId, String shelfId) async {
+    try {
+      final floors = await getFloorsByLibrary(libraryId);
+      for (final floor in floors) {
+        final shelves = await getShelvesByFloor(libraryId, floor.id);
+        final match = shelves.where((s) => s.id == shelfId).toList();
+        if (match.isNotEmpty) return match.first;
+      }
+      return null;
+    } catch (e) {
+      throw Exception('Erreur lors de la récupération du rayon: $e');
+    }
+  }
+
   // ==================== Books ====================
 
   /// Récupère un livre par ISBN
@@ -195,7 +214,7 @@ class FirebaseService {
   Future<BookLocation?> getBookLocation(String isbn, String libraryId) async {
     try {
       final snapshot = await _firestore
-          .collection('bookLocations')
+          .collection('book_locations')
           .where('bookIsbn', isEqualTo: isbn)
           .where('libraryId', isEqualTo: libraryId)
           .limit(1)
@@ -212,7 +231,7 @@ class FirebaseService {
   Future<List<BookLocation>> getShelfBooks(String libraryId, String shelfId) async {
     try {
       final snapshot = await _firestore
-          .collection('bookLocations')
+          .collection('book_locations')
           .where('libraryId', isEqualTo: libraryId)
           .where('shelfId', isEqualTo: shelfId)
           .orderBy('position')
@@ -229,7 +248,7 @@ class FirebaseService {
     try {
       // Find existing location document
       final snapshot = await _firestore
-          .collection('bookLocations')
+          .collection('book_locations')
           .where('bookIsbn', isEqualTo: location.bookIsbn)
           .where('libraryId', isEqualTo: location.libraryId)
           .where('shelfId', isEqualTo: location.shelfId)
@@ -239,7 +258,7 @@ class FirebaseService {
       if (snapshot.docs.isNotEmpty) {
         await snapshot.docs.first.reference.update(location.toFirestore());
       } else {
-        await _firestore.collection('bookLocations').add(location.toFirestore());
+        await _firestore.collection('book_locations').add(location.toFirestore());
       }
     } catch (e) {
       throw Exception('Erreur lors de la mise à jour de la position: $e');
@@ -350,7 +369,7 @@ class FirebaseService {
   /// Écoute les livres d'un rayon en temps réel
   Stream<List<BookLocation>> watchShelfBooks(String libraryId, String shelfId) {
     return _firestore
-        .collection('bookLocations')
+        .collection('book_locations')
         .where('libraryId', isEqualTo: libraryId)
         .where('shelfId', isEqualTo: shelfId)
         .orderBy('position')

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/library.dart';
-import '../data/mock_data.dart';
+import '../models/floor.dart';
+import '../models/shelf.dart';
+import '../services/firebase_service.dart';
 
-/// Écran d'informations sur la bibliothèque
-class LibraryInfoScreen extends StatelessWidget {
+/// Écran d'informations sur la bibliothèque - données depuis Firebase
+class LibraryInfoScreen extends StatefulWidget {
   final Library library;
 
   const LibraryInfoScreen({
@@ -12,8 +14,49 @@ class LibraryInfoScreen extends StatelessWidget {
   });
 
   @override
+  State<LibraryInfoScreen> createState() => _LibraryInfoScreenState();
+}
+
+class _LibraryInfoScreenState extends State<LibraryInfoScreen> {
+  final FirebaseService _firebase = FirebaseService();
+  List<Floor> _floors = [];
+  bool _loading = true;
+  String? _error;
+
+  Future<void> _loadFloors() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final list = await _firebase.getFloorsByLibrary(widget.library.id);
+      if (mounted) {
+        setState(() {
+          _floors = list;
+          _loading = false;
+          _error = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _floors = [];
+          _loading = false;
+          _error = e.toString();
+        });
+      }
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFloors();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final floors = MockData.getFloorsByLibrary(library.id);
+    final library = widget.library;
 
     return Scaffold(
       appBar: AppBar(
@@ -138,9 +181,7 @@ class LibraryInfoScreen extends StatelessWidget {
                     icon: Icons.analytics,
                     title: 'Informations',
                     children: [
-                      _statRow('Étages', '${library.floorCount}'),
-                      _statRow('Rayons', '${MockData.shelves.where((s) => s.libraryId == library.id).length}'),
-                      _statRow('Livres totaux', '${MockData.books.length}'),
+                      _statRow('Étages', '${_floors.length}'),
                     ],
                   ),
                 ],
@@ -162,7 +203,34 @@ class LibraryInfoScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  if (floors.isEmpty)
+                  if (_loading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: CircularProgressIndicator(color: Color(0xFF38ada9)),
+                      ),
+                    )
+                  else if (_error != null)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Column(
+                          children: [
+                            Text(
+                              'Erreur: $_error',
+                              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 8),
+                            TextButton(
+                              onPressed: _loadFloors,
+                              child: const Text('Réessayer'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else if (_floors.isEmpty)
                     Center(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 24),
@@ -176,9 +244,8 @@ class LibraryInfoScreen extends StatelessWidget {
                     )
                   else
                     Column(
-                      children: floors.map((floor) {
-                        final floorShelves = MockData.getShelvesByFloor(floor.id);
-                        return _buildFloorCard(floor, floorShelves);
+                      children: _floors.map((floor) {
+                        return _buildFloorCardAsync(floor);
                       }).toList(),
                     ),
                 ],
@@ -266,7 +333,17 @@ class LibraryInfoScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFloorCard(dynamic floor, List<dynamic> shelves) {
+  Widget _buildFloorCardAsync(Floor floor) {
+    return FutureBuilder<List<Shelf>>(
+      future: _firebase.getShelvesByFloor(widget.library.id, floor.id),
+      builder: (context, snapshot) {
+        final shelves = snapshot.data ?? [];
+        return _buildFloorCard(floor, shelves);
+      },
+    );
+  }
+
+  Widget _buildFloorCard(Floor floor, List<Shelf> shelves) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(
@@ -292,9 +369,9 @@ class LibraryInfoScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (floor.description != null) ...[
+                if (floor.description != null && floor.description!.isNotEmpty) ...[
                   Text(
-                    floor.description,
+                    floor.description!,
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.grey[700],
@@ -331,9 +408,9 @@ class LibraryInfoScreen extends StatelessWidget {
                                     fontSize: 13,
                                   ),
                                 ),
-                                if (shelf.category != null)
+                                if (shelf.category != null && shelf.category!.isNotEmpty)
                                   Text(
-                                    shelf.category,
+                                    shelf.category!,
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: Colors.grey[600],

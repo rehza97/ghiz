@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/library.dart';
-import '../data/mock_data.dart';
+import '../services/firebase_service.dart';
 import 'dashboard_screen.dart';
 
-/// Écran de sélection de la bibliothèque (point d'entrée)
+/// Écran de sélection de la bibliothèque (point d'entrée) - données depuis Firebase
 class LibrarySelectionScreen extends StatefulWidget {
   const LibrarySelectionScreen({super.key});
 
@@ -13,6 +13,10 @@ class LibrarySelectionScreen extends StatefulWidget {
 
 class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
   String? selectedWilaya;
+  final FirebaseService _firebase = FirebaseService();
+  List<Library> _libraries = [];
+  bool _loading = true;
+  String? _error;
 
   // Liste des wilayas algériennes
   final List<String> wilayas = [
@@ -79,11 +83,50 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
 
   List<Library> get filteredLibraries {
     if (selectedWilaya == null || selectedWilaya == 'Tous') {
-      return MockData.libraries;
+      return _libraries;
     }
-    return MockData.libraries
+    return _libraries
         .where((lib) => lib.city == selectedWilaya)
         .toList();
+  }
+
+  Future<void> _loadLibraries() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final wilaya = (selectedWilaya == null || selectedWilaya == 'Tous')
+          ? null
+          : selectedWilaya;
+      final list = await _firebase.getLibraries(wilaya: wilaya);
+      if (mounted) {
+        setState(() {
+          _libraries = list;
+          _loading = false;
+          _error = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _libraries = [];
+          _loading = false;
+          _error = e.toString();
+        });
+      }
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLibraries();
+  }
+
+  @override
+  void didUpdateWidget(covariant LibrarySelectionScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
   }
 
   @override
@@ -214,16 +257,14 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
                       onSelected: (selected) {
                         setState(() {
                           if (wilaya == 'Tous') {
-                            // "Tous" always resets to show all libraries
                             selectedWilaya = null;
                           } else if (selected) {
-                            // Select this wilaya
                             selectedWilaya = wilaya;
                           } else {
-                            // Deselect - show all libraries
                             selectedWilaya = null;
                           }
                         });
+                        _loadLibraries();
                       },
                       selectedColor: const Color(0xFF38ada9),
                       backgroundColor: Colors.grey[200],
@@ -250,15 +291,66 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
             ),
           ),
 
-          // Liste des bibliothèques
+          // Liste des bibliothèques (ou chargement / erreur)
           SliverPadding(
             padding: const EdgeInsets.all(16),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                final library = libraries[index];
-                return _buildLibraryCard(context, library);
-              }, childCount: libraries.length),
-            ),
+            sliver: _loading
+                ? const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Center(
+                        child: CircularProgressIndicator(color: Color(0xFF38ada9)),
+                      ),
+                    ),
+                  )
+                : _error != null
+                    ? SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            children: [
+                              Icon(Icons.error_outline, size: 48, color: Colors.grey[600]),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Erreur de chargement',
+                                style: TextStyle(fontSize: 18, color: Colors.grey[800]),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _error!,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: _loadLibraries,
+                                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF38ada9)),
+                                child: const Text('Réessayer', style: TextStyle(color: Colors.white)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : libraries.isEmpty
+                        ? SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.all(32),
+                              child: Center(
+                                child: Text(
+                                  'Aucune bibliothèque pour le moment.',
+                                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                                ),
+                              ),
+                            ),
+                          )
+                        : SliverList(
+                            delegate: SliverChildBuilderDelegate((context, index) {
+                              final library = libraries[index];
+                              return _buildLibraryCard(context, library);
+                            }, childCount: libraries.length),
+                          ),
           ),
 
           // Espacement en bas

@@ -35,24 +35,25 @@ service cloud.firestore {
     }
     
     // ========== Libraries (top-level) ==========
-    // Only admin/super_admin can create/update libraries (librarians cannot)
+    // Public read so mobile app can list libraries, floors, shelves without sign-in.
+    // Only admin/super_admin can create/update libraries (librarians cannot).
     match /libraries/{libraryId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create, update, delete: if hasAdminRole();
       
-      // Floors - only admin/super_admin (librarians cannot create floors)
+      // Floors - public read for mobile app
       match /floors/{floorId} {
-        allow read: if isAuthenticated();
+        allow read: if true;
         allow create, update, delete: if hasAdminRole();
         
-        // Shelves - librarians can manage shelves in their library
+        // Shelves - public read for mobile app
         match /shelves/{shelfId} {
-          allow read: if isAuthenticated();
+          allow read: if true;
           allow create, update, delete: if hasLibrarianOrAdminRole();
           
-          // Shelf books - librarians manage books on shelves
+          // Shelf books - public read for mobile AR/scans
           match /books/{bookIsbn} {
-            allow read: if isAuthenticated();
+            allow read: if true;
             allow create, update, delete: if hasLibrarianOrAdminRole();
           }
         }
@@ -60,14 +61,16 @@ service cloud.firestore {
     }
     
     // ========== Books (global catalog) ==========
+    // Public read so mobile app can search and resolve book details.
     match /books/{bookId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create, update, delete: if hasLibrarianOrAdminRole();
     }
     
     // ========== Book Locations (shelf positions) ==========
+    // Public read so mobile app can show where books are and AR/shelf state.
     match /book_locations/{locationId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create, update, delete: if hasLibrarianOrAdminRole();
     }
     

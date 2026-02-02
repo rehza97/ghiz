@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/library.dart';
 import '../models/book.dart';
-import '../data/mock_data.dart';
+import '../models/book_location.dart';
+import '../services/firebase_service.dart';
 
-/// Écran de recherche de livres
+/// Écran de recherche de livres - données depuis Firebase
 class BookSearchScreen extends StatefulWidget {
   final Library library;
 
@@ -18,8 +19,11 @@ class BookSearchScreen extends StatefulWidget {
 
 class _BookSearchScreenState extends State<BookSearchScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final FirebaseService _firebase = FirebaseService();
   List<Book> _searchResults = [];
   String _selectedCategory = 'Tous';
+  bool _loading = false;
+  String? _error;
 
   final List<String> _categories = [
     'Tous',
@@ -36,35 +40,75 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(_performSearch);
-    _searchResults = MockData.books;
+    _searchController.addListener(_onSearchChanged);
+    _loadInitialBooks();
   }
 
   @override
   void dispose() {
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
   }
 
-  void _performSearch() {
-    final query = _searchController.text;
+  void _onSearchChanged() {
+    _performSearch();
+  }
+
+  Future<void> _loadInitialBooks() async {
     setState(() {
-      if (query.isEmpty && _selectedCategory == 'Tous') {
-        _searchResults = MockData.books;
-      } else {
-        _searchResults = MockData.books.where((book) {
-          final matchesQuery = query.isEmpty ||
-              book.title.toLowerCase().contains(query.toLowerCase()) ||
-              book.author.toLowerCase().contains(query.toLowerCase()) ||
-              book.isbn.contains(query);
-
-          final matchesCategory = _selectedCategory == 'Tous' ||
-              book.category == _selectedCategory;
-
-          return matchesQuery && matchesCategory;
-        }).toList();
-      }
+      _loading = true;
+      _error = null;
     });
+    try {
+      final books = await _firebase.searchBooks('');
+      if (mounted) {
+        setState(() {
+          _searchResults = _filterByCategoryList(books, _selectedCategory);
+          _loading = false;
+          _error = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _searchResults = [];
+          _loading = false;
+          _error = e.toString();
+        });
+      }
+    }
+  }
+
+  List<Book> _filterByCategoryList(List<Book> books, String category) {
+    if (category == 'Tous') return books;
+    return books.where((b) => b.category == category).toList();
+  }
+
+  Future<void> _performSearch() async {
+    final query = _searchController.text.trim();
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final books = await _firebase.searchBooks(query.isEmpty ? '' : query);
+      if (mounted) {
+        setState(() {
+          _searchResults = _filterByCategoryList(books, _selectedCategory);
+          _loading = false;
+          _error = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _searchResults = [];
+          _loading = false;
+          _error = e.toString();
+        });
+      }
+    }
   }
 
   void _filterByCategory(String category) {
@@ -159,70 +203,104 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
             ),
           ),
 
-          // Results Count
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                _searchResults.isEmpty
-                    ? 'Aucun livre trouvé'
-                    : '${_searchResults.length} livre${_searchResults.length > 1 ? 's' : ''}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ),
-
-          // Books List
-          if (_searchResults.isEmpty)
+          // Loading / Error
+          if (_loading && _searchResults.isEmpty)
+            const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator(color: Color(0xFF38ada9))),
+            )
+          else if (_error != null)
             SliverFillRemaining(
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.search_off,
-                      size: 64,
-                      color: Colors.grey[300],
-                    ),
+                    Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
                     const SizedBox(height: 16),
                     Text(
-                      'Aucun livre trouvé',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey[600],
-                        fontWeight: FontWeight.w500,
-                      ),
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 14, color: Colors.grey[700]),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Essayez une autre recherche',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey[500],
-                      ),
+                    const SizedBox(height: 16),
+                    TextButton.icon(
+                      onPressed: _loadInitialBooks,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Réessayer'),
                     ),
                   ],
                 ),
               ),
             )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.all(16),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final book = _searchResults[index];
-                    final location = MockData.getBookLocation(book.isbn);
-                    return _buildBookCard(book, location);
-                  },
-                  childCount: _searchResults.length,
+          else ...[
+            // Results Count
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  _searchResults.isEmpty
+                      ? 'Aucun livre trouvé'
+                      : '${_searchResults.length} livre${_searchResults.length > 1 ? 's' : ''}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ),
+
+            // Books List
+            if (_searchResults.isEmpty)
+              SliverFillRemaining(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.search_off,
+                        size: 64,
+                        color: Colors.grey[300],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Aucun livre trouvé',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Essayez une autre recherche',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.all(16),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final book = _searchResults[index];
+                      return FutureBuilder<BookLocation?>(
+                        future: _firebase.getBookLocation(book.isbn, widget.library.id),
+                        builder: (context, snapshot) {
+                          return _buildBookCard(book, snapshot.data);
+                        },
+                      );
+                    },
+                    childCount: _searchResults.length,
+                  ),
+                ),
+              ),
+          ],
 
           // Bottom spacing
           const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
@@ -231,7 +309,7 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
     );
   }
 
-  Widget _buildBookCard(Book book, dynamic location) {
+  Widget _buildBookCard(Book book, BookLocation? location) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
@@ -426,9 +504,9 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
                 _buildDetailRow('ISBN', book.isbn),
                 _buildDetailRow('Catégorie', book.category),
                 if (location != null) ...[
-                  _buildDetailRow(
-                    'Étage',
-                    MockData.getFloorById(location.floorId)?.name ?? 'N/A',
+                  FutureBuilder<String>(
+                    future: _firebase.getFloorById(widget.library.id, location.floorId).then((f) => f?.name ?? 'N/A'),
+                    builder: (context, snap) => _buildDetailRow('Étage', snap.data ?? '...'),
                   ),
                   _buildDetailRow(
                     'Rayon',

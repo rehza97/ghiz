@@ -7,8 +7,9 @@ import '../models/shelf_book.dart';
 import '../models/book_correction_guide.dart';
 import '../models/book_location.dart';
 import '../models/book.dart';
+import '../models/shelf.dart';
 import '../services/ar_service.dart';
-import '../data/mock_data.dart';
+import '../services/firebase_service.dart';
 import 'book_correction_screen.dart';
 
 /// Helper class to track barcode with screen position
@@ -62,6 +63,14 @@ class ARBookDetectionScreen extends StatefulWidget {
 class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
   late MobileScannerController _scannerController;
   final ARService _arService = ARService();
+  final FirebaseService _firebase = FirebaseService();
+
+  // Shelf loaded once (no floorId on widget)
+  Shelf? _shelf;
+  /// Expected books on shelf (for AR overlay and correction guide)
+  List<ShelfBook> _expectedShelfBooks = [];
+  final Map<String, Book> _detectedBookByIsbn = {};
+  final Map<String, BookLocation> _detectedLocationByIsbn = {};
 
   // Track last scan time to prevent too rapid processing (debounce)
   DateTime? _lastScanTime;
@@ -83,15 +92,27 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
   void initState() {
     super.initState();
     _scannerController = MobileScannerController(
-      // Enable auto-focus (automatic focus)
       detectionSpeed: DetectionSpeed.noDuplicates,
-      // Support all barcode formats (horizontal, vertical, rotated - all orientations)
       formats: const [BarcodeFormat.all],
-      // Enable torch if needed
       torchEnabled: false,
-      // Auto-start scanning
       autoStart: true,
     );
+    _loadShelf();
+  }
+
+  Future<void> _loadShelf() async {
+    try {
+      final shelf = await _firebase.getShelfByLibraryAndShelfId(widget.libraryId, widget.shelfId);
+      if (mounted) {
+        setState(() {
+          _shelf = shelf;
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ [AR] Failed to load shelf: $e');
+      }
+    }
   }
 
   @override
@@ -100,7 +121,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
     super.dispose();
   }
 
-  void _handleBarcode(BarcodeCapture barcodes) {
+  Future<void> _handleBarcode(BarcodeCapture barcodes) async {
     if (!_isScanning) return;
 
     // Debounce: prevent processing too rapidly (max once every 200ms)
@@ -207,9 +228,8 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
     }
 
     if (arNeedsUpdate) {
-      setState(() {
-         _updateARView();
-      });
+      await _updateARView();
+      if (mounted) setState(() {});
     }
   }
 
@@ -224,13 +244,11 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
       debugPrint('🔧 [NORMALIZE] Input: "$isbn" → Trimmed: "$trimmed" → Cleaned: "$cleaned" (${cleaned.length} chars)');
     }
     
-    // If it's a 13-digit ISBN, format it to match mock_data format: 978-XXXXXXXXXX (check digit in second group)
+    // If it's a 13-digit ISBN, format as 978-XXXXXXXXXX (check digit in second group)
     if (cleaned.length == 13 && RegExp(r'^\d{13}$').hasMatch(cleaned)) {
-      // Format: 978-XXXXXXXXXX (where XXXXXXXX is 9 digits + check digit = 10 chars)
-      // This matches the format used in mock_data.dart
       final formatted = '${cleaned.substring(0, 3)}-${cleaned.substring(3)}';
       if (kDebugMode) {
-        debugPrint('✅ [NORMALIZE] Formatted (matching mock_data): "$formatted"');
+        debugPrint('✅ [NORMALIZE] Formatted: "$formatted"');
       }
       return formatted;
     }
@@ -250,16 +268,15 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
     return trimmed;
   }
 
-  void _addDetectedBook(String barcode, int physicalDetectionOrder, double screenX) {
+  Future<void> _addDetectedBook(String barcode, int physicalDetectionOrder, double screenX) async {
     if (_detectedBarcodes.contains(barcode)) {
-      // Don't show snackbar for duplicates, just return silently
       if (kDebugMode) {
         debugPrint('⚠️  [BOOK ADD] Duplicate barcode ignored: $barcode');
       }
       return;
     }
 
-    final book = MockData.getBookByIsbn(barcode);
+    final book = await _firebase.getBookByIsbn(barcode);
     if (book == null) {
       if (kDebugMode) {
         debugPrint('❌ [BOOK ADD] Book not found for ISBN: $barcode');
@@ -273,7 +290,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
       debugPrint('   ISBN: $barcode, Category: ${book.category}');
     }
 
-    final location = MockData.getBookLocation(barcode);
+    final location = await _firebase.getBookLocation(barcode, widget.libraryId);
     if (location == null || location.shelfId != widget.shelfId) {
       if (kDebugMode) {
         debugPrint('❌ [BOOK ADD] Wrong shelf - Expected: ${widget.shelfId}, Found: ${location?.shelfId ?? "null"}');
@@ -282,7 +299,8 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
       return;
     }
 
-    // Store detection info with physical order
+    _detectedBookByIsbn[barcode] = book;
+    _detectedLocationByIsbn[barcode] = location;
     _detectedBooksInfo[barcode] = _DetectedBookInfo(
       detectionOrder: physicalDetectionOrder,
       screenX: screenX,
@@ -301,15 +319,15 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
 
     setState(() {
       _detectedBarcodes.add(barcode);
-      _updateARView();
     });
+    await _updateARView();
+    if (mounted) setState(() {});
 
-    // Show success message for new detection
     _showSnackBar('${book.title} détecté ✓ (Pos: $physicalDetectionOrder)', Colors.green);
   }
 
-  void _updateARView() {
-    final shelf = MockData.getShelfById(widget.shelfId);
+  Future<void> _updateARView() async {
+    final shelf = _shelf;
     if (shelf == null) return;
 
     // Sort detected barcodes by physical detection order (left-to-right)
@@ -323,21 +341,18 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
       return infoA.detectionOrder.compareTo(infoB.detectionOrder);
     });
 
-    // Créer les ShelfBooks détectés avec PHYSICAL ORDER (from left-to-right scanning)
     final detectedBooks = sortedBarcodes
         .asMap()
         .entries
         .map((entry) {
           final index = entry.key;
           final barcode = entry.value;
-          final book = MockData.getBookByIsbn(barcode);
-          final location = MockData.getBookLocation(barcode);
+          final book = _detectedBookByIsbn[barcode];
+          final location = _detectedLocationByIsbn[barcode];
           final detectionInfo = _detectedBooksInfo[barcode];
           
           if (book == null || location == null) return null;
 
-          // Use PHYSICAL DETECTION ORDER (left-to-right) as currentPosition
-          // This is the actual position as scanned from the camera view
           final physicalPosition = detectionInfo?.detectionOrder ?? (index + 1);
           final expectedPosition = location.expectedPosition;
           final isCorrect = physicalPosition == expectedPosition;
@@ -352,7 +367,7 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
 
           return ShelfBook(
             book: book,
-            currentPosition: physicalPosition, // Use physical detection order!
+            currentPosition: physicalPosition,
             expectedPosition: expectedPosition,
             barcode: barcode,
             isCorrect: isCorrect,
@@ -364,20 +379,34 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
         .whereType<ShelfBook>()
         .toList();
 
-    // Générer les données AR
     _arDataList = _arService.generateShelfARView(
       detectedBooks: detectedBooks,
-      getBook: (isbn) => MockData.getBookByIsbn(isbn)!,
-      getLocation: (isbn) => MockData.getBookLocation(isbn)!,
+      getBook: (isbn) => _detectedBookByIsbn[isbn]!,
+      getLocation: (isbn) => _detectedLocationByIsbn[isbn]!,
       shelf: shelf,
       distanceToShelf: _distanceToShelf,
     );
 
-    // Calculer le guide de correction
-    final shelfBooks = MockData.getShelfBooks(widget.shelfId, widget.libraryId);
+    final locations = await _firebase.getShelfBooks(widget.libraryId, widget.shelfId);
+    final expectedShelfBooks = <ShelfBook>[];
+    for (final loc in locations) {
+      final book = await _firebase.getBookByIsbn(loc.bookIsbn);
+      if (book != null) {
+        expectedShelfBooks.add(ShelfBook(
+          book: book,
+          currentPosition: loc.position,
+          expectedPosition: loc.expectedPosition,
+          barcode: loc.bookIsbn,
+          isCorrect: loc.isCorrectOrder,
+          deviation: (loc.expectedPosition - loc.position).abs(),
+          movementDirection: loc.position < loc.expectedPosition ? 'droite' : 'gauche',
+        ));
+      }
+    }
+    _expectedShelfBooks = expectedShelfBooks;
     _correctionGuide = _arService.calculateCorrectionGuide(
       detectedBooks: detectedBooks,
-      expectedBooks: shelfBooks,
+      expectedBooks: _expectedShelfBooks,
       shelfId: widget.shelfId,
     );
 
@@ -411,9 +440,12 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
   void _clearDetection() {
     setState(() {
       _detectedBarcodes.clear();
-      _detectedBooksInfo.clear(); // Clear physical order tracking
-      _nextDetectionOrder = 1; // Reset order counter
+      _detectedBooksInfo.clear();
+      _detectedBookByIsbn.clear();
+      _detectedLocationByIsbn.clear();
+      _nextDetectionOrder = 1;
       _arDataList.clear();
+      _expectedShelfBooks = [];
       _correctionGuide = null;
       _lastScanTime = null;
       _updateScanStatus();
@@ -561,21 +593,29 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
     );
   }
 
-  void _showTestBooksDialog() {
-    // Get books on shelf_004 (default shelf)
-    final shelfBooks = MockData.bookLocations
-        .where((loc) => loc.shelfId == widget.shelfId && loc.libraryId == widget.libraryId)
-        .map((loc) {
-          final book = MockData.getBookByIsbn(loc.bookIsbn);
-          return {'location': loc, 'book': book};
-        })
-        .where((item) => item['book'] != null)
-        .toList();
+  void _showTestBooksDialog() async {
+    try {
+      final locations = await _firebase.getShelfBooks(widget.libraryId, widget.shelfId);
+      final shelfBooks = <Map<String, dynamic>>[];
+      for (final loc in locations) {
+        final book = await _firebase.getBookByIsbn(loc.bookIsbn);
+        if (book != null) shelfBooks.add({'location': loc, 'book': book});
+      }
 
-    if (kDebugMode) {
-      debugPrint('📋 [TEST BOOKS] Showing ${shelfBooks.length} test books for shelf ${widget.shelfId}');
+      if (kDebugMode) {
+        debugPrint('📋 [TEST BOOKS] Showing ${shelfBooks.length} test books for shelf ${widget.shelfId}');
+      }
+
+      if (!mounted) return;
+      _showTestBooksDialogContent(shelfBooks);
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar('Erreur: $e', Colors.red);
+      }
     }
+  }
 
+  void _showTestBooksDialogContent(List<Map<String, dynamic>> shelfBooks) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -886,13 +926,10 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
   Widget _buildAROverlay() {
     if (_arDataList.isEmpty) return const SizedBox.shrink();
     
-    // Get all books from shelf to show complete order
-    final shelfBooks = MockData.getShelfBooks(widget.shelfId, widget.libraryId);
-    
     return CustomPaint(
       painter: AROverlayPainter(
         arDataList: _arDataList,
-        allShelfBooks: shelfBooks,
+        allShelfBooks: _expectedShelfBooks,
       ),
       child: SizedBox.expand(
         child: GestureDetector(
