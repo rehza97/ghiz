@@ -6,7 +6,7 @@
     <uses-feature android:glEsVersion="0x00030000" android:required="true" />
     
     <application
-        android:label="flutter_application_1"
+        android:label="تطبيق DocShelf Eye: تطبيق ذكي لإدارة الأرصدة الوثائقية"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:enableOnBackInvokedCallback="true">

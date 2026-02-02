@@ -129,7 +129,7 @@ export function AdminDashboard() {
                   لوحة التحكم الإدارية
                 </h1>
                 <p className="text-xs text-gray-600 dark:text-gray-400">
-                  نظام إدارة المكتبات بتقنية AR
+                  DocShelf Eye
                 </p>
               </div>
             </div>

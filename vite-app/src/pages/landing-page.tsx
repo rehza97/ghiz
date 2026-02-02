@@ -91,10 +91,10 @@ export function LandingPage() {
               </div>
               <div>
                 <span className="text-lg font-bold text-gray-900 dark:text-white">
-                  نظام إدارة المكتبات
+                  DocShelf Eye
                 </span>
                 <p className="text-xs text-gray-600 dark:text-gray-400">
-                  Library Management System
+                  تطبيق ذكي لإدارة الأرصدة الوثائقية
                 </p>
               </div>
             </div>
@@ -681,7 +681,7 @@ export function LandingPage() {
               <div className="flex items-center gap-2">
                 <Library className="h-6 w-6 text-[#38ada9]" />
                 <span className="text-lg font-bold text-gray-900 dark:text-white">
-                  نظام إدارة المكتبات
+                  DocShelf Eye
                 </span>
               </div>
               <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -728,7 +728,7 @@ export function LandingPage() {
 
           <div className="border-t mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              © 2026 نظام إدارة المكتبات. جميع الحقوق محفوظة.
+              © 2026 DocShelf Eye. جميع الحقوق محفوظة.
             </p>
             <div className="flex gap-6 text-sm text-gray-600 dark:text-gray-400">
               <button>الشروط</button>

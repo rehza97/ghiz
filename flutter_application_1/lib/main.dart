@@ -14,7 +14,7 @@ class MainApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ماسح الكتب بالواقع المعزز - الجزائر',
+      title: 'تطبيق DocShelf Eye: تطبيق ذكي لإدارة الأرصدة الوثائقية',
       theme: ThemeData(
         primaryColor: const Color(0xFF38ada9),
         colorScheme: ColorScheme.fromSeed(
