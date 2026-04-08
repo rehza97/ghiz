@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
 import '../models/library.dart';
-import '../services/book_service.dart';
+import '../models/shelf.dart';
+import '../services/app_settings_service.dart';
+import '../services/firebase_service.dart';
+import '../services/local_librarian_profile_service.dart';
+import 'add_books_rows_screen.dart';
 import 'book_search_screen.dart';
 import 'ar_book_detection_screen.dart';
 import 'scanned_books_screen.dart';
 import 'library_info_screen.dart';
+import 'faq_screen.dart';
 
 /// Écran du tableau de bord principal - Hub central avec tous les features
 class DashboardScreen extends StatefulWidget {
   final Library library;
+  final LibrarianProfile? librarianProfile;
 
   const DashboardScreen({
     super.key,
     required this.library,
+    this.librarianProfile,
   });
 
   @override
@@ -20,61 +27,307 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final BookService _bookService = BookService();
-  int _currentIndex = 0;
+  static const String _faqTutorialSeenKey = 'faq_tutorial_seen_v1';
 
-  late final List<Widget> _screens;
+  final FirebaseService _firebase = FirebaseService();
+  final AppSettingsService _settings = AppSettingsService();
+  int _currentIndex = 0;
+  int _totalBooks = 0;
+  int _totalShelves = 0;
+  int _misplacedBooks = 0;
+  int _correctBooks = 0;
+  bool _openingArScanner = false;
+
+  String get _displayLibraryName {
+    final fromProfile = widget.librarianProfile?.libraryName.trim();
+    if (fromProfile != null && fromProfile.isNotEmpty) return fromProfile;
+    return widget.library.name;
+  }
+
+  String get _displaySubtitle {
+    final fromProfile = widget.librarianProfile?.fullName.trim();
+    if (fromProfile != null && fromProfile.isNotEmpty) return fromProfile;
+    return widget.library.city;
+  }
+
+  String? get _displayDescription {
+    final profile = widget.librarianProfile;
+    if (profile == null) return widget.library.description;
+
+    final email = profile.email.trim();
+    final phone = profile.phone?.trim();
+    if (email.isEmpty && (phone == null || phone.isEmpty)) {
+      return widget.library.description;
+    }
+
+    if (phone != null && phone.isNotEmpty) {
+      return 'البريد: $email | الهاتف: $phone';
+    }
+    return 'البريد: $email';
+  }
 
   @override
   void initState() {
     super.initState();
-    _screens = [
-      _buildHomeTab(),
-      BookSearchScreen(library: widget.library),
-      ScannedBooksScreen(bookService: _bookService),
-      LibraryInfoScreen(library: widget.library),
-    ];
+    _loadStats();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showFaqTutorialIfFirstTime();
+    });
+  }
+
+  Future<void> _showFaqTutorialIfFirstTime() async {
+    final seen = await _settings.getBool(_faqTutorialSeenKey);
+    if (seen || !mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('مرحباً 👋'),
+        content: const Text(
+          'يمكنك العثور على شرح التطبيق في صفحة FAQ.\n'
+          'من الأعلى يمين الشاشة اضغط أيقونة علامة الاستفهام (؟).',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('لاحقاً'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                this.context,
+                MaterialPageRoute(builder: (_) => const FaqScreen()),
+              );
+            },
+            child: const Text('فتح FAQ'),
+          ),
+        ],
+      ),
+    );
+    await _settings.setBool(_faqTutorialSeenKey, true);
+  }
+
+  Future<void> _loadStats() async {
+    final books = await _firebase.searchBooks('', libraryId: widget.library.id);
+    final floors = await _firebase.getFloorsByLibrary(widget.library.id);
+    final locations = await _firebase.getBookLocationsByLibrary(
+      widget.library.id,
+    );
+    int shelvesCount = 0;
+    for (final floor in floors) {
+      final shelves = await _firebase.getShelvesByFloor(
+        widget.library.id,
+        floor.id,
+      );
+      shelvesCount += shelves.length;
+    }
+    final misplaced = locations.where((l) => !l.isCorrectOrder).length;
+    final correct = locations.where((l) => l.isCorrectOrder).length;
+    if (!mounted) return;
+    setState(() {
+      _totalBooks = books.length;
+      _totalShelves = shelvesCount;
+      _misplacedBooks = misplaced;
+      _correctBooks = correct;
+    });
+  }
+
+  List<Widget> _buildScreens() => [
+    _buildHomeTab(),
+    BookSearchScreen(library: widget.library),
+    ScannedBooksScreen(library: widget.library),
+    AddBooksRowsScreen(library: widget.library),
+    LibraryInfoScreen(library: widget.library),
+  ];
+
+  Future<void> _openArScanner() async {
+    if (_openingArScanner) return;
+    setState(() => _openingArScanner = true);
+    try {
+      final floors = await _firebase.getFloorsByLibrary(widget.library.id);
+      if (!mounted) return;
+      if (floors.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('لا توجد طوابق. أضف طابقاً أولاً')),
+        );
+        return;
+      }
+
+      final shelves = <Shelf>[];
+      for (final floor in floors) {
+        final floorShelves = await _firebase.getShelvesByFloor(
+          widget.library.id,
+          floor.id,
+        );
+        shelves.addAll(floorShelves);
+      }
+      if (!mounted) return;
+      if (shelves.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('لا توجد رفوف. أضف رفاً أولاً')),
+        );
+        return;
+      }
+
+      final selectedShelf = await _pickShelfForAr(shelves);
+      if (!mounted || selectedShelf == null) return;
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ARBookDetectionScreen(
+            shelfId: selectedShelf.id,
+            libraryId: widget.library.id,
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _openingArScanner = false);
+      }
+    }
+  }
+
+  Future<Shelf?> _pickShelfForAr(List<Shelf> shelves) async {
+    if (shelves.length == 1) return shelves.first;
+    return showModalBottomSheet<Shelf>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView.separated(
+          shrinkWrap: true,
+          itemCount: shelves.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (context, index) {
+            final shelf = shelves[index];
+            return ListTile(
+              leading: const Icon(Icons.shelves),
+              title: Text(shelf.name),
+              subtitle: Text('السعة: ${shelf.capacity}'),
+              onTap: () => Navigator.pop(context, shelf),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+        toolbarHeight: 78,
+        titleSpacing: 12,
+        title: Row(
           children: [
-            Text(
-              widget.library.name,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
+              ),
+              child: const Icon(
+                Icons.local_library_outlined,
+                color: Colors.white,
+                size: 21,
+              ),
             ),
-            Text(
-              widget.library.city,
-              style: const TextStyle(fontSize: 12, color: Colors.white70),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _displayLibraryName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _displaySubtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
-        backgroundColor: const Color(0xFF38ada9),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                const Color(0xFF2f9d98),
+                const Color(0xFF38ada9),
+                const Color(0xFF3c6382).withValues(alpha: 0.9),
+              ],
+            ),
+          ),
+        ),
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) =>
-                      LibraryInfoScreen(library: widget.library),
+          Padding(
+            padding: const EdgeInsetsDirectional.only(end: 8),
+            child: Material(
+              color: Colors.white.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const FaqScreen()),
+                  );
+                },
+                child: const Padding(
+                  padding: EdgeInsets.all(10),
+                  child: Icon(Icons.help_outline, color: Colors.white),
                 ),
-              );
-            },
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsetsDirectional.only(end: 10),
+            child: Material(
+              color: Colors.white.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          LibraryInfoScreen(library: widget.library),
+                    ),
+                  );
+                },
+                child: const Padding(
+                  padding: EdgeInsets.all(10),
+                  child: Icon(Icons.info_outline, color: Colors.white),
+                ),
+              ),
+            ),
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
+      body: IndexedStack(index: _currentIndex, children: _buildScreens()),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) {
@@ -86,30 +339,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
         selectedItemColor: const Color(0xFF38ada9),
         unselectedItemColor: Colors.grey,
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'الرئيسية',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: 'بحث',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'الرئيسية'),
+          BottomNavigationBarItem(icon: Icon(Icons.search), label: 'بحث'),
           BottomNavigationBarItem(
             icon: Icon(Icons.qr_code_2),
             label: 'الممسوحة',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.info),
-            label: 'معلومات',
+            icon: Icon(Icons.add_box_outlined),
+            label: 'إضافة',
           ),
+          BottomNavigationBarItem(icon: Icon(Icons.info), label: 'معلومات'),
         ],
       ),
     );
   }
 
   Widget _buildHomeTab() {
-    return SingleChildScrollView(
-      child: Column(
+    final totalTracked = _correctBooks + _misplacedBooks;
+    final accuracy = totalTracked == 0
+        ? 0
+        : ((_correctBooks / totalTracked) * 100).round();
+
+    return RefreshIndicator(
+      onRefresh: _loadStats,
+      child: ListView(
         children: [
           // Hero Section
           Container(
@@ -128,22 +382,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(
-                  Icons.library_books,
-                  color: Colors.white,
-                  size: 40,
-                ),
+                const Icon(Icons.library_books, color: Colors.white, size: 40),
                 const SizedBox(height: 16),
                 const Text(
                   'مرحباً بك في',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  widget.library.name,
+                  _displayLibraryName,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 28,
@@ -151,13 +398,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                if (widget.library.description != null)
+                if (_displayDescription != null)
                   Text(
-                    widget.library.description!,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 13,
-                    ),
+                    _displayDescription!,
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
                   ),
               ],
             ),
@@ -187,39 +431,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       onTap: () => setState(() => _currentIndex = 1),
                     ),
                     _buildActionCard(
-                      icon: Icons.qr_code_scanner,
-                      title: 'مسح الكتب',
-                      subtitle: 'اكتشاف الباركود',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ARBookDetectionScreen(
-                              shelfId: 'shelf_004',
-                              libraryId: widget.library.id,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    _buildActionCard(
                       icon: Icons.view_in_ar,
                       title: 'تصحيح الواقع المعزز',
                       subtitle: 'إعادة ترتيب الكتب',
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('ابدأ بمسح الكتب'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      },
+                      onTap: _openArScanner,
                     ),
                     _buildActionCard(
                       icon: Icons.list,
                       title: 'مسوحاتي',
                       subtitle: 'عرض السجل',
                       onTap: () => setState(() => _currentIndex = 2),
+                    ),
+                    _buildActionCard(
+                      icon: Icons.add_box_outlined,
+                      title: 'إضافة كتب ورفوف',
+                      subtitle: 'إدخال محلي سريع',
+                      onTap: () => setState(() => _currentIndex = 3),
                     ),
                   ],
                 ),
@@ -246,25 +473,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     Expanded(
                       child: _buildStatCard(
-                        icon: Icons.library_books,
-                        value: '${widget.library.floorCount}',
-                        label: 'طوابق',
+                        icon: Icons.shelves,
+                        value: '$_totalShelves',
+                        label: 'رفوف',
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: _buildStatCard(
-                        icon: Icons.shelves,
-                        value: '${_bookService.totalScanned}',
+                        icon: Icons.menu_book,
+                        value: '$_totalBooks',
                         label: 'كتب',
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: _buildStatCard(
-                        icon: Icons.check_circle,
-                        value: '0',
-                        label: 'مصححة',
+                        icon: Icons.analytics_outlined,
+                        value: '$accuracy%',
+                        label: 'دقّة الترتيب',
                       ),
                     ),
                   ],
@@ -305,7 +532,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'استخدم الماسح لاكتشاف الباركود بسرعة',
+                          _misplacedBooks > 0
+                              ? 'يوجد $_misplacedBooks كتاب يحتاج ترتيب. استخدم واقع معزز للتصحيح.'
+                              : 'جميع الكتب الممسوحة حالياً في أماكنها الصحيحة.',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.blue[700],
@@ -340,8 +569,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: Colors.grey[200]!,
+              color: const Color(0xFF38ada9).withValues(alpha: 0.12),
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -355,11 +591,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: const Color(0xFF38ada9).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(
-                  icon,
-                  color: const Color(0xFF38ada9),
-                  size: 22,
-                ),
+                child: Icon(icon, color: const Color(0xFF38ada9), size: 22),
               ),
               const SizedBox(height: 10),
               Flexible(
@@ -378,12 +610,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Flexible(
                 child: Text(
                   subtitle,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.grey[600],
-                  ),
+                  style: TextStyle(fontSize: 10, color: Colors.grey[600]),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Align(
+                alignment: Alignment.centerRight,
+                child: Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 16,
+                  color: Color(0xFF38ada9),
                 ),
               ),
             ],
@@ -409,11 +647,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            icon,
-            color: const Color(0xFF38ada9),
-            size: 24,
-          ),
+          Icon(icon, color: const Color(0xFF38ada9), size: 24),
           const SizedBox(height: 6),
           Flexible(
             child: Text(
@@ -431,10 +665,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Flexible(
             child: Text(
               label,
-              style: TextStyle(
-                fontSize: 10,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 10, color: Colors.grey[600]),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
@@ -450,10 +681,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 class Grid extends StatelessWidget {
   final List<Widget> children;
 
-  const Grid({
-    super.key,
-    required this.children,
-  });
+  const Grid({super.key, required this.children});
 
   @override
   Widget build(BuildContext context) {
@@ -476,10 +704,7 @@ class Grid extends StatelessWidget {
 class GridItem extends StatelessWidget {
   final Widget child;
 
-  const GridItem({
-    super.key,
-    required this.child,
-  });
+  const GridItem({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) => child;

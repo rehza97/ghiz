@@ -1,51 +1,33 @@
-import 'dart:math' as math;
+import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import '../models/book_ar_data.dart';
-import '../models/shelf_book.dart';
-import '../models/book_correction_guide.dart';
 import '../models/book_location.dart';
 import '../models/book.dart';
 import '../models/shelf.dart';
-import '../services/ar_service.dart';
 import '../services/firebase_service.dart';
-import 'book_correction_screen.dart';
 
-/// Helper class to track barcode with screen position
-class _BarcodeWithPosition {
-  final String isbn;
-  final double screenX;
-  final String rawValue;
-  final int detectionIndex;
-  
-  _BarcodeWithPosition({
-    required this.isbn,
-    required this.screenX,
-    required this.rawValue,
-    required this.detectionIndex,
+// ─── Result model ────────────────────────────────────────────────────────────
+
+class _ScannedResult {
+  final Book book;
+  final BookLocation? location;
+  final bool isCorrectShelf;
+  final String? wrongShelfName; // name of the shelf it actually belongs to
+
+  _ScannedResult({
+    required this.book,
+    required this.location,
+    required this.isCorrectShelf,
+    this.wrongShelfName,
   });
 }
 
-/// Helper class to track detected book information
-class _DetectedBookInfo {
-  int detectionOrder; // Physical position from left (1, 2, 3...)
-  double screenX;
-  DateTime detectedAt;
-  
-  _DetectedBookInfo({
-    required this.detectionOrder,
-    required this.screenX,
-    required this.detectedAt,
-  });
-  
-  void updatePosition(int newOrder, double newScreenX) {
-    detectionOrder = newOrder;
-    screenX = newScreenX;
-  }
-}
+enum _ScannerQualityMode { balanced, high }
 
-/// Écran de détection AR des livres
+// ─── Screen ──────────────────────────────────────────────────────────────────
+
 class ARBookDetectionScreen extends StatefulWidget {
   final String shelfId;
   final String libraryId;
@@ -60,374 +42,299 @@ class ARBookDetectionScreen extends StatefulWidget {
   State<ARBookDetectionScreen> createState() => _ARBookDetectionScreenState();
 }
 
-class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
+class _ARBookDetectionScreenState extends State<ARBookDetectionScreen>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late MobileScannerController _scannerController;
-  final ARService _arService = ARService();
   final FirebaseService _firebase = FirebaseService();
+  _ScannerQualityMode _qualityMode = _ScannerQualityMode.high;
 
-  // Shelf loaded once (no floorId on widget)
   Shelf? _shelf;
-  /// Expected books on shelf (for AR overlay and correction guide)
-  List<ShelfBook> _expectedShelfBooks = [];
-  final Map<String, Book> _detectedBookByIsbn = {};
-  final Map<String, BookLocation> _detectedLocationByIsbn = {};
+  final List<String> _scannedIsbns = [];
+  final List<_ScannedResult> _scannedResults = [];
 
-  // Track last scan time to prevent too rapid processing (debounce)
   DateTime? _lastScanTime;
-  final List<String> _detectedBarcodes = [];
-  // Track detected books with their physical detection order (left-to-right from scanning)
-  final Map<String, _DetectedBookInfo> _detectedBooksInfo = {};
-  // Track the order of first detection (physical left-to-right order)
-  int _nextDetectionOrder = 1;
-  List<BookARData> _arDataList = [];
-  BookCorrectionGuide? _correctionGuide;
-
-  final bool _isScanning = true;
-  final double _distanceToShelf = 2.0; // Distance simulée
-  String _scanStatus = 'وجّه الكاميرا نحو الرف';
   bool _isFocusing = false;
   Offset? _focusPoint;
+  late final AnimationController _pulseController;
+  late final Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
-    _scannerController = MobileScannerController(
-      detectionSpeed: DetectionSpeed.noDuplicates,
-      formats: const [BarcodeFormat.all],
-      torchEnabled: false,
-      autoStart: true,
+    WidgetsBinding.instance.addObserver(this);
+    _scannerController = _createScannerController(_qualityMode);
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1300),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.96, end: 1.02).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
     _loadShelf();
   }
 
-  Future<void> _loadShelf() async {
-    try {
-      final shelf = await _firebase.getShelfByLibraryAndShelfId(widget.libraryId, widget.shelfId);
-      if (mounted) {
-        setState(() {
-          _shelf = shelf;
-        });
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ [AR] Failed to load shelf: $e');
-      }
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _scannerController.start();
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _scannerController.stop();
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _pulseController.dispose();
     _scannerController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleBarcode(BarcodeCapture barcodes) async {
-    if (!_isScanning) return;
-
-    // Debounce: prevent processing too rapidly (max once every 200ms)
-    final now = DateTime.now();
-    if (_lastScanTime != null &&
-        now.difference(_lastScanTime!).inMilliseconds < 200) {
-      return;
-    }
-
-    // Track barcodes with their display values for left-to-right ordering
-    // Use displayValue position info if available, otherwise use detection sequence
-    final List<_BarcodeWithPosition> barcodesWithPos = [];
-    
-    // Log all detected barcodes
-    if (kDebugMode && barcodes.barcodes.isNotEmpty) {
-      debugPrint('📷 [BARCODE SCAN] Detected ${barcodes.barcodes.length} barcode(s) in frame');
-    }
-    
-    for (int idx = 0; idx < barcodes.barcodes.length; idx++) {
-      final barcode = barcodes.barcodes[idx];
-      final value = barcode.rawValue;
-      if (value != null) {
-        // Normalize ISBN format (handle with/without dashes)
-        final normalizedIsbn = _normalizeIsbn(value);
-        
-        // Estimate screen X position from detection index and display value
-        // mobile_scanner detects barcodes roughly left-to-right when scanning
-        // Use index as a proxy for left-to-right order when multiple detected
-        double screenX = idx / math.max(barcodes.barcodes.length - 1, 1.0); // Normalize to 0-1
-        
-        // If displayValue exists, try to extract position hints
-        if (barcode.displayValue != null && barcode.displayValue!.isNotEmpty) {
-          // Use detection order - first detected is typically leftmost
-          screenX = idx / math.max(barcodes.barcodes.length, 1.0);
-        }
-        
-        barcodesWithPos.add(_BarcodeWithPosition(
-          isbn: normalizedIsbn,
-          screenX: screenX,
-          rawValue: value,
-          detectionIndex: idx,
-        ));
-      }
-    }
-
-    // Sort by screen X position (left to right) to determine physical order in this frame
-    barcodesWithPos.sort((a, b) => a.screenX.compareTo(b.screenX));
-    
-    if (barcodesWithPos.isEmpty) return;
-
-    _lastScanTime = DateTime.now();
-
-    // ---------------------------------------------------------
-    // DYNAMIC REORDERING LOGIC
-    // ---------------------------------------------------------
-    // 1. Collect all available "order slots" from detected books + allocate new ones
-    List<int> availableOrders = [];
-    List<_BarcodeWithPosition> newBooks = [];
-    
-    for (var b in barcodesWithPos) {
-      if (_detectedBooksInfo.containsKey(b.isbn)) {
-        availableOrders.add(_detectedBooksInfo[b.isbn]!.detectionOrder);
-      } else {
-        newBooks.add(b);
-      }
-    }
-
-    // Allocate new orders for new books (using next available global IDs)
-    for (var _ in newBooks) {
-      availableOrders.add(_nextDetectionOrder++);
-    }
-
-    // Sort available orders to distribute them left-to-right across the screen
-    availableOrders.sort();
-
-    // 2. Assign sorted orders to the screen-sorted barcodes
-    // This ensures that books on the left get the lower order numbers
-    bool arNeedsUpdate = false;
-
-    for (int i = 0; i < barcodesWithPos.length; i++) {
-      final barcodeInfo = barcodesWithPos[i];
-      final newOrder = availableOrders[i];
-      
-      if (_detectedBooksInfo.containsKey(barcodeInfo.isbn)) {
-        // EXISTING BOOK: Update position if changed
-        final info = _detectedBooksInfo[barcodeInfo.isbn]!;
-        if (info.detectionOrder != newOrder) {
-           if (kDebugMode) {
-             debugPrint('🔄 [REORDER] ${barcodeInfo.isbn} moved: ${info.detectionOrder} -> $newOrder');
-           }
-           info.detectionOrder = newOrder;
-           info.screenX = barcodeInfo.screenX;
-           arNeedsUpdate = true;
-        }
-      } else {
-        // NEW BOOK: Add it
-        if (kDebugMode) {
-          debugPrint('✅ [BARCODE SCAN] New barcode detected: ${barcodeInfo.isbn} -> Order: $newOrder');
-        }
-        _addDetectedBook(barcodeInfo.isbn, newOrder, barcodeInfo.screenX);
-        // _addDetectedBook triggers setState, so we don't need to set arNeedsUpdate here
-        // but we continue the loop to handle others
-      }
-    }
-
-    if (arNeedsUpdate) {
-      await _updateARView();
-      if (mounted) setState(() {});
-    }
-  }
-
-  String _normalizeIsbn(String isbn) {
-    // Trim whitespace first (leading/trailing spaces from scanner)
-    final trimmed = isbn.trim();
-    
-    // Remove all dashes and spaces
-    final cleaned = trimmed.replaceAll(RegExp(r'[-\s]'), '');
-    
-    if (kDebugMode) {
-      debugPrint('🔧 [NORMALIZE] Input: "$isbn" → Trimmed: "$trimmed" → Cleaned: "$cleaned" (${cleaned.length} chars)');
-    }
-    
-    // If it's a 13-digit ISBN, format as 978-XXXXXXXXXX (check digit in second group)
-    if (cleaned.length == 13 && RegExp(r'^\d{13}$').hasMatch(cleaned)) {
-      final formatted = '${cleaned.substring(0, 3)}-${cleaned.substring(3)}';
-      if (kDebugMode) {
-        debugPrint('✅ [NORMALIZE] Formatted: "$formatted"');
-      }
-      return formatted;
-    }
-    
-    // If it's a valid 10 or 13 digit number but not standard format, return cleaned
-    if (RegExp(r'^\d{10}$|^\d{13}$').hasMatch(cleaned)) {
-      if (kDebugMode) {
-        debugPrint('⚠️  [NORMALIZE] Valid ISBN but non-standard format, returning cleaned: "$cleaned"');
-      }
-      return cleaned;
-    }
-    
-    // Return trimmed version if it doesn't match ISBN format
-    if (kDebugMode) {
-      debugPrint('❌ [NORMALIZE] Invalid ISBN format, returning trimmed: "$trimmed"');
-    }
-    return trimmed;
-  }
-
-  Future<void> _addDetectedBook(String barcode, int physicalDetectionOrder, double screenX) async {
-    if (_detectedBarcodes.contains(barcode)) {
-      if (kDebugMode) {
-        debugPrint('⚠️  [BOOK ADD] Duplicate barcode ignored: $barcode');
-      }
-      return;
-    }
-
-    final book = await _firebase.getBookByIsbn(barcode);
-    if (book == null) {
-      if (kDebugMode) {
-        debugPrint('❌ [BOOK ADD] Book not found for ISBN: $barcode');
-      }
-      _showSnackBar('الباركود غير معروف: $barcode', Colors.red);
-      return;
-    }
-
-    if (kDebugMode) {
-      debugPrint('📚 [BOOK ADD] Found book: ${book.title} by ${book.author}');
-      debugPrint('   ISBN: $barcode, Category: ${book.category}');
-    }
-
-    final location = await _firebase.getBookLocation(barcode, widget.libraryId);
-    if (location == null || location.shelfId != widget.shelfId) {
-      if (kDebugMode) {
-        debugPrint('❌ [BOOK ADD] Wrong shelf - Expected: ${widget.shelfId}, Found: ${location?.shelfId ?? "null"}');
-      }
-      _showSnackBar('${book.title} ليس على هذا الرف', Colors.red);
-      return;
-    }
-
-    _detectedBookByIsbn[barcode] = book;
-    _detectedLocationByIsbn[barcode] = location;
-    _detectedBooksInfo[barcode] = _DetectedBookInfo(
-      detectionOrder: physicalDetectionOrder,
-      screenX: screenX,
-      detectedAt: DateTime.now(),
+  MobileScannerController _createScannerController(_ScannerQualityMode mode) {
+    final isHigh = mode == _ScannerQualityMode.high;
+    return MobileScannerController(
+      // DetectionSpeed.normal allows multiple barcodes per frame.
+      detectionSpeed: DetectionSpeed.normal,
+      formats: const [BarcodeFormat.all],
+      cameraResolution: isHigh ? const Size(1920, 1080) : const Size(1280, 720),
+      autoZoom: isHigh,
+      torchEnabled: false,
+      autoStart: true,
     );
+  }
 
-    if (kDebugMode) {
-      debugPrint('✅ [BOOK ADD] Book added successfully:');
-      debugPrint('   Title: ${book.title}');
-      debugPrint('   Physical Position (Left-to-Right): $physicalDetectionOrder');
-      debugPrint('   Database Position: ${location.position}');
-      debugPrint('   Expected Position: ${location.expectedPosition}');
-      debugPrint('   Correct Order: ${location.isCorrectOrder}');
-      debugPrint('   Total detected: ${_detectedBarcodes.length + 1}');
-    }
-
+  Future<void> _setQualityMode(_ScannerQualityMode mode) async {
+    if (_qualityMode == mode) return;
+    await _scannerController.stop();
+    await _scannerController.dispose();
+    if (!mounted) return;
     setState(() {
-      _detectedBarcodes.add(barcode);
+      _qualityMode = mode;
+      _scannerController = _createScannerController(mode);
     });
-    await _updateARView();
-    if (mounted) setState(() {});
-
-    _showSnackBar('تم اكتشاف ${book.title} ✓ (الموقع: $physicalDetectionOrder)', Colors.green);
   }
 
-  Future<void> _updateARView() async {
-    final shelf = _shelf;
-    if (shelf == null) return;
-
-    // Sort detected barcodes by physical detection order (left-to-right)
-    final sortedBarcodes = List<String>.from(_detectedBarcodes);
-    sortedBarcodes.sort((a, b) {
-      final infoA = _detectedBooksInfo[a];
-      final infoB = _detectedBooksInfo[b];
-      if (infoA == null && infoB == null) return 0;
-      if (infoA == null) return 1;
-      if (infoB == null) return -1;
-      return infoA.detectionOrder.compareTo(infoB.detectionOrder);
-    });
-
-    final detectedBooks = sortedBarcodes
-        .asMap()
-        .entries
-        .map((entry) {
-          final index = entry.key;
-          final barcode = entry.value;
-          final book = _detectedBookByIsbn[barcode];
-          final location = _detectedLocationByIsbn[barcode];
-          final detectionInfo = _detectedBooksInfo[barcode];
-          
-          if (book == null || location == null) return null;
-
-          final physicalPosition = detectionInfo?.detectionOrder ?? (index + 1);
-          final expectedPosition = location.expectedPosition;
-          final isCorrect = physicalPosition == expectedPosition;
-          final deviation = (expectedPosition - physicalPosition).abs();
-
-          if (kDebugMode) {
-            debugPrint('📋 [AR UPDATE] ${book.title}:');
-            debugPrint('   Physical Position (scanned left-to-right): $physicalPosition');
-            debugPrint('   Expected Position (database): $expectedPosition');
-            debugPrint('   Is Correct: $isCorrect');
-          }
-
-          return ShelfBook(
-            book: book,
-            currentPosition: physicalPosition,
-            expectedPosition: expectedPosition,
-            barcode: barcode,
-            isCorrect: isCorrect,
-            deviation: deviation,
-            movementDirection:
-                physicalPosition < expectedPosition ? 'يمين' : 'يسار',
-          );
-        })
-        .whereType<ShelfBook>()
-        .toList();
-
-    _arDataList = _arService.generateShelfARView(
-      detectedBooks: detectedBooks,
-      getBook: (isbn) => _detectedBookByIsbn[isbn]!,
-      getLocation: (isbn) => _detectedLocationByIsbn[isbn]!,
-      shelf: shelf,
-      distanceToShelf: _distanceToShelf,
+  Future<void> _loadShelf() async {
+    final shelf = await _firebase.getShelfByLibraryAndShelfId(
+      widget.libraryId,
+      widget.shelfId,
     );
+    if (mounted) setState(() => _shelf = shelf);
+  }
 
-    final locations = await _firebase.getShelfBooks(widget.libraryId, widget.shelfId);
-    final expectedShelfBooks = <ShelfBook>[];
-    for (final loc in locations) {
-      final book = await _firebase.getBookByIsbn(loc.bookIsbn);
-      if (book != null) {
-        expectedShelfBooks.add(ShelfBook(
-          book: book,
-          currentPosition: loc.position,
-          expectedPosition: loc.expectedPosition,
-          barcode: loc.bookIsbn,
-          isCorrect: loc.isCorrectOrder,
-          deviation: (loc.expectedPosition - loc.position).abs(),
-          movementDirection: loc.position < loc.expectedPosition ? 'يمين' : 'يسار',
-        ));
+  // ── Barcode handling ───────────────────────────────────────────────────────
+
+  Future<void> _handleBarcode(BarcodeCapture barcodes) async {
+    if (barcodes.barcodes.isEmpty) return;
+
+    // Debounce: skip frames that arrive too fast but always process
+    // frames that contain NEW barcodes not yet seen.
+    final now = DateTime.now();
+    final tooSoon =
+        _lastScanTime != null &&
+        now.difference(_lastScanTime!).inMilliseconds < 300;
+
+    // Collect new codes from this frame
+    final newCodes = <String>[];
+    for (final barcode in barcodes.barcodes) {
+      final raw = barcode.rawValue;
+      if (raw == null) continue;
+      final parsed = _parseBarcode(raw);
+      final key = parsed.isbn.isNotEmpty ? parsed.isbn : raw;
+      if (!_scannedIsbns.contains(key)) {
+        newCodes.add(raw);
       }
     }
-    _expectedShelfBooks = expectedShelfBooks;
-    _correctionGuide = _arService.calculateCorrectionGuide(
-      detectedBooks: detectedBooks,
-      expectedBooks: _expectedShelfBooks,
-      shelfId: widget.shelfId,
-    );
 
-    _updateScanStatus();
+    if (newCodes.isEmpty) return; // all already scanned
+    if (tooSoon) return; // throttle only when nothing new
+    _lastScanTime = now;
+
+    // Process all new barcodes from this frame in parallel
+    await Future.wait(newCodes.map(_addScannedCode));
   }
 
-  void _updateScanStatus() {
-    if (_detectedBarcodes.isEmpty) {
-      _scanStatus = 'وجّه الكاميرا نحو الرف (يدعم عدة رموز)';
+  /// Parses a raw scanned value.
+  /// Supports two formats:
+  ///   - Plain ISBN:            "9785969710157"
+  ///   - Composite (with shelf): "9785969710157 A-1"
+  ///
+  /// Returns (isbn, embeddedShelfName).
+  ({String isbn, String? shelfCode}) _parseBarcode(String raw) {
+    final trimmed = raw.replaceAll(RegExp(r'[\x00-\x1F]'), '').trim();
+
+    // Composite: first token is all-digits ISBN, rest is shelf code
+    final spaceIdx = trimmed.indexOf(' ');
+    if (spaceIdx > 0) {
+      final left = trimmed
+          .substring(0, spaceIdx)
+          .replaceAll(RegExp(r'[^0-9]'), '');
+      final right = trimmed.substring(spaceIdx + 1).trim();
+      if (RegExp(r'^\d{10}$|^\d{13}$').hasMatch(left) && right.isNotEmpty) {
+        return (isbn: left, shelfCode: right);
+      }
+    }
+
+    // Plain ISBN — strip dashes/spaces
+    final cleaned = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+    return (isbn: cleaned, shelfCode: null);
+  }
+
+  bool _isValidIsbn13(String value) {
+    if (!RegExp(r'^\d{13}$').hasMatch(value)) return false;
+    int sum = 0;
+    for (int i = 0; i < 12; i++) {
+      final d = int.parse(value[i]);
+      sum += i.isEven ? d : d * 3;
+    }
+    final check = (10 - (sum % 10)) % 10;
+    return check == int.parse(value[12]);
+  }
+
+  bool _isValidIsbn10(String value) {
+    if (!RegExp(r'^\d{9}[\dXx]$').hasMatch(value)) return false;
+    int sum = 0;
+    for (int i = 0; i < 9; i++) {
+      sum += (10 - i) * int.parse(value[i]);
+    }
+    final last = value[9].toUpperCase() == 'X' ? 10 : int.parse(value[9]);
+    sum += last;
+    return sum % 11 == 0;
+  }
+
+  bool _isValidBookCode(String isbn) {
+    return _isValidIsbn13(isbn) || _isValidIsbn10(isbn);
+  }
+
+  Future<void> _addScannedCode(String value) async {
+    // ── Shelf barcode (SHELF:{id} label on the physical shelf) ────────────
+    if (value.startsWith('SHELF:')) {
+      _scannedIsbns.add(value);
+      final shelfId = value.substring(6);
+      final shelf = await _firebase.getShelfByLibraryAndShelfId(
+        widget.libraryId,
+        shelfId,
+      );
+      if (!mounted) return;
+      final isThis = shelfId == widget.shelfId;
+      _showSnack(
+        isThis
+            ? '✅ الرف الصحيح: ${shelf?.name ?? shelfId}'
+            : '⚠️ هذا رف آخر: ${shelf?.name ?? shelfId}',
+        isThis ? Colors.green : Colors.orange,
+      );
+      return;
+    }
+
+    // ── Book barcode (plain ISBN or composite "isbn shelfCode") ───────────
+    final parsed = _parseBarcode(value);
+    final isbn = parsed.isbn;
+    final embeddedShelf = parsed.shelfCode; // e.g. "A-1" from composite label
+
+    if (_scannedIsbns.contains(isbn)) return;
+    if (!_isValidBookCode(isbn)) {
+      if (kDebugMode) {
+        debugPrint('⚠️ Ignored invalid barcode payload: "$value" -> "$isbn"');
+      }
+      return;
+    }
+
+    final book = await _firebase.getBookByIsbn(isbn);
+    if (book == null) {
+      if (kDebugMode) debugPrint('ℹ️ Book not found in DB: $isbn');
+      _showSnack('هذا الباركود غير موجود في قاعدة البيانات', Colors.orange);
+      return;
+    }
+    _scannedIsbns.add(isbn);
+
+    bool isCorrect;
+    String? wrongShelfName;
+    BookLocation? location;
+
+    if (embeddedShelf != null) {
+      // ── Fast path: shelf code is baked into the barcode ─────────────────
+      // Compare embedded shelf name directly against current shelf name.
+      final currentShelfName = _shelf?.name ?? widget.shelfId;
+      isCorrect = embeddedShelf == currentShelfName;
+      if (!isCorrect) wrongShelfName = embeddedShelf;
     } else {
-      final count = _detectedBarcodes.length;
-      if (_correctionGuide?.isInCorrectOrder ?? false) {
-        _scanStatus = '$count كتاب مكتشف - الكل بالترتيب الصحيح ✓';
-      } else {
-        final errors = _correctionGuide?.totalErrorsFound ?? 0;
-        _scanStatus = '$count كتاب مكتشف - $errors يحتاج تصحيح';
+      // ── Slow path: look up location from DB ──────────────────────────────
+      location = await _firebase.getBookLocation(isbn, widget.libraryId);
+      isCorrect = location?.shelfId == widget.shelfId;
+      if (!isCorrect && location != null) {
+        final wrongShelf = await _firebase.getShelfByLibraryAndShelfId(
+          widget.libraryId,
+          location.shelfId,
+        );
+        wrongShelfName = wrongShelf?.name ?? location.shelfId;
       }
     }
+
+    if (!mounted) return;
+    HapticFeedback.lightImpact();
+    // Persist the scan timestamp so ScannedBooksScreen can filter by it.
+    unawaited(_firebase.markBookAsScanned(isbn));
+    setState(() {
+      _scannedResults.add(
+        _ScannedResult(
+          book: book,
+          location: location,
+          isCorrectShelf: isCorrect,
+          wrongShelfName: wrongShelfName,
+        ),
+      );
+    });
   }
 
-  void _showSnackBar(String message, Color color) {
+  void _clear() {
+    setState(() {
+      _scannedIsbns.clear();
+      _scannedResults.clear();
+      _lastScanTime = null;
+    });
+  }
+
+  // ── Focus / torch ──────────────────────────────────────────────────────────
+
+  void _handleTap(TapDownDetails details) {
+    setState(() {
+      _focusPoint = details.localPosition;
+      _isFocusing = true;
+    });
+    HapticFeedback.selectionClick();
+    _scannerController.stop();
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        _scannerController.start();
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (mounted) setState(() => _isFocusing = false);
+        });
+      }
+    });
+  }
+
+  void _toggleTorch() {
+    _scannerController.toggleTorch();
+    if (mounted) setState(() {});
+  }
+
+  void _triggerFocus() {
+    setState(() => _isFocusing = true);
+    HapticFeedback.selectionClick();
+    _scannerController.stop();
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        _scannerController.start();
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (mounted) setState(() => _isFocusing = false);
+        });
+      }
+    });
+  }
+
+  void _showSnack(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -437,998 +344,555 @@ class _ARBookDetectionScreenState extends State<ARBookDetectionScreen> {
     );
   }
 
-  void _clearDetection() {
-    setState(() {
-      _detectedBarcodes.clear();
-      _detectedBooksInfo.clear();
-      _detectedBookByIsbn.clear();
-      _detectedLocationByIsbn.clear();
-      _nextDetectionOrder = 1;
-      _arDataList.clear();
-      _expectedShelfBooks = [];
-      _correctionGuide = null;
-      _lastScanTime = null;
-      _updateScanStatus();
-    });
-  }
-
-  void _handleTapToFocus(TapDownDetails details) {
-    final RenderBox? box = context.findRenderObject() as RenderBox?;
-    if (box == null) return;
-
-    final localPosition = details.localPosition;
-
-    setState(() {
-      _focusPoint = localPosition;
-      _isFocusing = true;
-    });
-
-    // Trigger auto-focus by restarting the scanner
-    _scannerController.stop();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) {
-        _scannerController.start();
-        // Hide focus indicator after focus animation
-        Future.delayed(const Duration(milliseconds: 1500), () {
-          if (mounted) {
-            setState(() {
-              _isFocusing = false;
-              _focusPoint = null;
-            });
-          }
-        });
-      }
-    });
-
-    _showSnackBar('تم ضبط البؤرة', Colors.cyan);
-  }
-
-  void _triggerAutoFocus() {
-    setState(() {
-      _isFocusing = true;
-    });
-
-    // Restart scanner to trigger auto-focus
-    _scannerController.stop();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) {
-        _scannerController.start();
-        Future.delayed(const Duration(milliseconds: 1500), () {
-          if (mounted) {
-            setState(() {
-              _isFocusing = false;
-            });
-          }
-        });
-      }
-    });
-
-    _showSnackBar('تم تفعيل الضبط التلقائي', Colors.cyan);
-  }
-
-  void _toggleTorch() {
-    final currentTorch = _scannerController.torchEnabled;
-    _scannerController.toggleTorch();
-    _showSnackBar(
-      currentTorch ? 'الفلاش مغلق' : 'الفلاش مفتوح',
-      Colors.amber,
-    );
-  }
-
-  Widget _buildFocusIndicator(Offset position) {
-    return Positioned(
-      left: position.dx - 40,
-      top: position.dy - 40,
-      child: AnimatedOpacity(
-        opacity: _isFocusing ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 200),
-        child: Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: Colors.cyan,
-              width: 2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.cyan.withValues(alpha: 0.5),
-                blurRadius: 10,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: const Center(
-            child: Icon(
-              Icons.center_focus_strong,
-              color: Colors.cyan,
-              size: 32,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFocusControls() {
-    return Column(
-      children: [
-        // Auto-focus button
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.7),
-            shape: BoxShape.circle,
-          ),
-          child: IconButton(
-            icon: Icon(
-              _isFocusing ? Icons.center_focus_strong : Icons.center_focus_weak,
-              color: _isFocusing ? Colors.cyan : Colors.white,
-            ),
-            onPressed: _triggerAutoFocus,
-            tooltip: 'ضبط تلقائي',
-          ),
-        ),
-        const SizedBox(height: 8),
-        // Torch button
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.7),
-            shape: BoxShape.circle,
-          ),
-          child: IconButton(
-            icon: Icon(
-              _scannerController.torchEnabled
-                  ? Icons.flash_on
-                  : Icons.flash_off,
-              color: _scannerController.torchEnabled
-                  ? Colors.amber
-                  : Colors.white,
-            ),
-            onPressed: _toggleTorch,
-            tooltip: 'فلاش',
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showTestBooksDialog() async {
-    try {
-      final locations = await _firebase.getShelfBooks(widget.libraryId, widget.shelfId);
-      final shelfBooks = <Map<String, dynamic>>[];
-      for (final loc in locations) {
-        final book = await _firebase.getBookByIsbn(loc.bookIsbn);
-        if (book != null) shelfBooks.add({'location': loc, 'book': book});
-      }
-
-      if (kDebugMode) {
-        debugPrint('📋 [TEST BOOKS] Showing ${shelfBooks.length} test books for shelf ${widget.shelfId}');
-      }
-
-      if (!mounted) return;
-      _showTestBooksDialogContent(shelfBooks);
-    } catch (e) {
-      if (mounted) {
-        _showSnackBar('خطأ: $e', Colors.red);
-      }
-    }
-  }
-
-  void _showTestBooksDialogContent(List<Map<String, dynamic>> shelfBooks) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            const Icon(Icons.book, color: Color(0xFF38ada9)),
-            const SizedBox(width: 8),
-            const Text('كتب التجربة'),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'الأرقام الدولية المتوفرة على هذا الرف:',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ...shelfBooks.map((item) {
-                final location = item['location'] as BookLocation;
-                final book = item['book'] as Book;
-                final isCorrect = location.isCorrectOrder;
-                
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isCorrect 
-                        ? Colors.green.withValues(alpha: 0.1)
-                        : Colors.orange.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isCorrect ? Colors.green : Colors.orange,
-                      width: 1,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            isCorrect ? Icons.check_circle : Icons.warning,
-                            color: isCorrect ? Colors.green : Colors.orange,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              book.title,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'ISBN: ${location.bookIsbn}',
-                        style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 13,
-                          color: Colors.blue,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'الموقع: ${location.position} → ${location.expectedPosition}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isCorrect ? Colors.green : Colors.orange,
-                        ),
-                      ),
-                      if (!isCorrect)
-                        Text(
-                          '❌ في مكان خاطئ',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.orange[700],
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              }),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.blue, size: 18),
-                        SizedBox(width: 8),
-                        Text(
-                          'نصيحة:',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      '• استخدم زر لوحة المفاتيح (🔤) للتجربة دون باركود\n'
-                      '• أو امسح الباركود المرئي\n'
-                      '• يدعم الأفقي والعمودي وجميع الزوايا',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('إغلاق'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showManualInputDialog() {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('إدخال الرقم الدولي يدوياً'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'للتجربة دون باركود فعلي، أدخل الرقم الدولي:',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                hintText: '978-2070364008',
-                labelText: 'الرقم الدولي',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.number,
-              autofocus: true,
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'يمكنك إدخال عدة أرقام دولية مفصولة بفواصل:\n\n'
-              'أمثلة:\n'
-              '978-2070364008\n'
-              '978-2070113018, 978-2080701473 (متعددة)',
-              style: TextStyle(fontSize: 11, color: Colors.grey),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('إلغاء'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (controller.text.isNotEmpty) {
-                // Support multiple ISBNs separated by commas
-                final input = controller.text.trim();
-                final isbns = input.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-                
-                // Process all ISBNs in order (left-to-right = first to last in input)
-                for (int idx = 0; idx < isbns.length; idx++) {
-                  final isbnInput = isbns[idx];
-                  // Remove dashes if present
-                  final cleaned = isbnInput.replaceAll('-', '').replaceAll(' ', '');
-                  // Add dashes in correct format if needed
-                  final formattedIsbn = cleaned.length == 13
-                      ? '${cleaned.substring(0, 3)}-${cleaned.substring(3, 12)}-${cleaned.substring(12)}'
-                      : isbnInput;
-                  // For manual input, assign position based on input order (left-to-right)
-                  final manualOrder = _nextDetectionOrder++;
-                  _addDetectedBook(formattedIsbn, manualOrder, idx / math.max(isbns.length - 1, 1.0));
-                }
-                
-                Navigator.pop(context);
-                
-                if (isbns.length > 1) {
-                  _showSnackBar('تمت إضافة ${isbns.length} رقم دولي', Colors.blue);
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF38ada9),
-            ),
-            child: const Text('مسح', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _startCorrection() {
-    if (_correctionGuide == null) return;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => BookCorrectionScreen(
-          correctionGuide: _correctionGuide!,
-          shelfId: widget.shelfId,
-          libraryId: widget.libraryId,
-        ),
-      ),
-    );
-  }
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    final shelfName = _shelf?.name ?? '…';
+    final correct = _scannedResults.where((r) => r.isCorrectShelf).length;
+    final wrong = _scannedResults.where((r) => !r.isCorrectShelf).length;
+
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('اكتشاف الكتب بالواقع المعزز'),
+        title: Text('رف: $shelfName'),
         backgroundColor: const Color(0xFF38ada9),
         elevation: 0,
         actions: [
-          // Test books reference
-          IconButton(
-            icon: const Icon(Icons.list),
-            onPressed: _showTestBooksDialog,
-            tooltip: 'كتب التجربة',
+          PopupMenuButton<_ScannerQualityMode>(
+            tooltip: 'جودة الكاميرا',
+            icon: const Icon(Icons.hd_outlined),
+            initialValue: _qualityMode,
+            onSelected: _setQualityMode,
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: _ScannerQualityMode.balanced,
+                child: Text('Balanced'),
+              ),
+              const PopupMenuItem(
+                value: _ScannerQualityMode.high,
+                child: Text('High Quality'),
+              ),
+            ],
           ),
-          // Manual input for testing
-          IconButton(
-            icon: const Icon(Icons.keyboard),
-            onPressed: _showManualInputDialog,
-            tooltip: 'إدخال الرقم يدوياً (تجربة)',
-          ),
-          if (_detectedBarcodes.isNotEmpty)
+          if (_scannedResults.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.refresh),
-              onPressed: _clearDetection,
+              onPressed: _clear,
               tooltip: 'إعادة تعيين',
             ),
         ],
       ),
       body: Stack(
         children: [
-          // Caméra avec scan de codes-barres avec tap-to-focus
-          // Supports horizontal, vertical, and all orientations automatically
+          // ── Camera ────────────────────────────────────────────────────
           GestureDetector(
-            onTapDown: (details) => _handleTapToFocus(details),
+            onTapDown: _handleTap,
             child: MobileScanner(
+              key: ValueKey(_qualityMode),
               controller: _scannerController,
               onDetect: _handleBarcode,
-              // Fit mode for better focus
               fit: BoxFit.cover,
+              // No scanWindow — full camera frame is active so multiple
+              // barcodes side-by-side (and any orientation) are all detected.
             ),
           ),
 
-          // Focus indicator overlay
-          if (_focusPoint != null)
-            _buildFocusIndicator(_focusPoint!),
+          // ── Scan guide ────────────────────────────────────────────────
+          _buildScanGuide(),
 
-          // Overlay AR avec informations des livres
-          if (_arDataList.isNotEmpty)
-            _buildAROverlay(),
+          // ── Focus dot ─────────────────────────────────────────────────
+          if (_focusPoint != null && _isFocusing)
+            Positioned(
+              left: _focusPoint!.dx - 35,
+              top: _focusPoint!.dy - 35,
+              child: AnimatedOpacity(
+                opacity: _isFocusing ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 200),
+                child: Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.cyan, width: 2),
+                  ),
+                  child: const Icon(
+                    Icons.center_focus_strong,
+                    color: Colors.cyan,
+                    size: 28,
+                  ),
+                ),
+              ),
+            ),
 
-          // Panneau inférieur avec informations
+          // ── Top status chip ───────────────────────────────────────────
           Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: _buildBottomPanel(),
-          ),
-
-          // Statut du scan
-          Positioned(
-            top: 16,
+            top: 12,
             left: 16,
-            right: 16,
-            child: _buildStatusCard(),
+            right: 72,
+            child: _buildStatusChip(correct, wrong),
           ),
 
-          // Focus control buttons
+          // ── Side controls ─────────────────────────────────────────────
           Positioned(
-            top: 80,
-            right: 16,
-            child: _buildFocusControls(),
+            top: 8,
+            right: 12,
+            child: Column(
+              children: [
+                _iconBtn(
+                  _isFocusing
+                      ? Icons.center_focus_strong
+                      : Icons.center_focus_weak,
+                  _isFocusing ? Colors.cyan : Colors.white,
+                  _triggerFocus,
+                ),
+                const SizedBox(height: 8),
+                _iconBtn(
+                  _scannerController.torchEnabled
+                      ? Icons.flash_on
+                      : Icons.flash_off,
+                  _scannerController.torchEnabled ? Colors.amber : Colors.white,
+                  _toggleTorch,
+                ),
+              ],
+            ),
           ),
+
+          // ── Bottom panel ──────────────────────────────────────────────
+          Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomPanel()),
         ],
       ),
     );
   }
 
-  Widget _buildAROverlay() {
-    if (_arDataList.isEmpty) return const SizedBox.shrink();
-    
-    return CustomPaint(
-      painter: AROverlayPainter(
-        arDataList: _arDataList,
-        allShelfBooks: _expectedShelfBooks,
+  Widget _iconBtn(IconData icon, Color color, VoidCallback onTap) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.7),
+        shape: BoxShape.circle,
       ),
-      child: SizedBox.expand(
-        child: GestureDetector(
-          onTap: () {
-            // Permettre de cliquer sur des livres pour plus de détails
-          },
-        ),
+      child: IconButton(
+        icon: Icon(icon, color: color),
+        onPressed: onTap,
+        iconSize: 22,
       ),
     );
   }
 
-  Widget _buildStatusCard() {
+  Widget _buildStatusChip(int correct, int wrong) {
+    if (_scannedResults.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.75),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.cyan.withValues(alpha: 0.6)),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.qr_code_scanner, color: Colors.cyan, size: 16),
+            SizedBox(width: 6),
+            Text(
+              'وجّه الكاميرا نحو باركود الكتاب',
+              style: TextStyle(color: Colors.white, fontSize: 13),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.8),
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.black.withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.cyan,
-          width: 2,
+          color: wrong > 0 ? Colors.orange : Colors.greenAccent,
+          width: 1.5,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.book, color: Colors.cyan, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  _scanStatus,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+          if (correct > 0) ...[
+            const Icon(Icons.check_circle, color: Colors.greenAccent, size: 16),
+            const SizedBox(width: 4),
+            Text(
+              '$correct',
+              style: const TextStyle(
+                color: Colors.greenAccent,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
               ),
-              if (_detectedBarcodes.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.cyan,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${_detectedBarcodes.length}',
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 10),
+          ],
+          if (wrong > 0) ...[
+            const Icon(Icons.warning_rounded, color: Colors.orange, size: 16),
+            const SizedBox(width: 4),
+            Text(
+              '$wrong',
+              style: const TextStyle(
+                color: Colors.orange,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
   Widget _buildBottomPanel() {
-    if (_detectedBarcodes.isEmpty) {
+    if (_scannedResults.isEmpty) {
       return Container(
-        color: Colors.black.withValues(alpha: 0.9),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.qr_code_scanner, color: Colors.cyan, size: 50),
-            const SizedBox(height: 12),
-            const Text(
-              'امسح باركود الكتب',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
+        color: Colors.black.withValues(alpha: 0.85),
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: const Center(
+          child: Text(
+            'لم يتم مسح أي كتاب بعد',
+            style: TextStyle(color: Colors.grey, fontSize: 14),
+          ),
         ),
       );
     }
 
+    // Show most recent on top
+    final results = _scannedResults.reversed.toList();
+
     return Container(
-      color: Colors.black.withValues(alpha: 0.9),
-      padding: const EdgeInsets.all(16),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.42,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.9),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Liste des livres détectés
-          SizedBox(
-            height: 100,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _arDataList.length,
-              itemBuilder: (context, index) {
-                final arData = _arDataList[index];
-                final statusColor = arData.arOverlay.colorValue;
-
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Container(
-                    width: 100,
-                    decoration: BoxDecoration(
-                      color: Color(statusColor).withValues(alpha: 0.2),
-                      border: Border.all(
-                        color: Color(statusColor),
-                        width: 2,
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    padding: const EdgeInsets.all(8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          arData.book.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Text(
-                              arData.arOverlay.badgeSymbol,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'الموقع: ${arData.currentPosition}/${arData.expectedPosition}',
-                              style: const TextStyle(
-                                color: Colors.grey,
-                                fontSize: 9,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
+          // Handle
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
-
-          const SizedBox(height: 12),
-
-          // Affichage du guide de correction
-          if (_correctionGuide != null) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: _correctionGuide!.isInCorrectOrder
-                    ? Colors.green.withValues(alpha: 0.3)
-                    : Colors.orange.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: _correctionGuide!.isInCorrectOrder
-                      ? Colors.green
-                      : Colors.orange,
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _correctionGuide!.accuracyDescription,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      if (!_correctionGuide!.isInCorrectOrder)
-                        Text(
-                          'تم العثور على ${_correctionGuide!.totalErrorsFound} خطأ',
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 12,
-                          ),
-                        ),
-                    ],
-                  ),
-                  if (!_correctionGuide!.isInCorrectOrder)
-                    ElevatedButton(
-                      onPressed: _startCorrection,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                      ),
-                      child: const Text(
-                        'تصحيح',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                ],
-              ),
+          const SizedBox(height: 8),
+          Flexible(
+            child: ListView.separated(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+              itemCount: results.length,
+              separatorBuilder: (_, __) =>
+                  const Divider(color: Colors.white12, height: 1),
+              itemBuilder: (context, i) => _buildResultRow(results[i]),
             ),
-          ],
+          ),
         ],
       ),
     );
   }
-}
 
-/// Painter pour l'overlay AR avec affichage en temps réel de l'ordre
-class AROverlayPainter extends CustomPainter {
-  final List<BookARData> arDataList;
-  final List<ShelfBook>? allShelfBooks;
+  Widget _buildResultRow(_ScannedResult r) {
+    final isOk = r.isCorrectShelf;
+    final color = isOk ? Colors.greenAccent : Colors.orange;
+    final icon = isOk ? Icons.check_circle : Icons.warning_rounded;
 
-  AROverlayPainter({
-    required this.arDataList,
-    this.allShelfBooks,
-  });
+    // Badge shows the shelf this book actually belongs to
+    final shelfBadge = isOk
+        ? (_shelf?.name ?? '…')
+        : (r.wrongShelfName ?? r.location?.shelfId ?? '؟');
+    final badgeColor = isOk ? const Color(0xFF38ada9) : Colors.orange.shade700;
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (arDataList.isEmpty) return;
-    
-    // Draw shelf layout showing book order in real-time
-    _drawShelfLayout(canvas, size);
-    
-    // Draw individual book badges with positions
-    for (final arData in arDataList) {
-      _drawBookPositionBadge(canvas, size, arData);
-    }
-    
-    // Draw shelf boundary
-    final firstArData = arDataList.first;
-    _drawShelfBoundary(canvas, size, firstArData);
-  }
-  
-  void _drawShelfLayout(Canvas canvas, Size size) {
-    // Draw shelf representation at bottom of screen
-    final shelfStartY = size.height * 0.75; // 75% down the screen
-    final shelfHeight = 80.0;
-    final shelfWidth = size.width * 0.9;
-    final shelfX = (size.width - shelfWidth) / 2;
-    
-    // Draw shelf background
-    final shelfPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.7)
-      ..style = PaintingStyle.fill;
-    
-    final shelfRect = Rect.fromLTWH(shelfX, shelfStartY, shelfWidth, shelfHeight);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(shelfRect, const Radius.circular(8)),
-      shelfPaint,
-    );
-    
-    // Draw shelf border
-    final borderPaint = Paint()
-      ..color = Colors.cyan
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(shelfRect, const Radius.circular(8)),
-      borderPaint,
-    );
-    
-    // Get all expected positions from shelf books
-    final maxPosition = allShelfBooks != null && allShelfBooks!.isNotEmpty
-        ? (allShelfBooks as List).map((b) => b.expectedPosition).reduce((a, b) => a > b ? a : b)
-        : 30;
-    
-    // Draw position markers for detected books
-    final bookSlotWidth = shelfWidth / math.max(maxPosition, 1);
-    
-    for (final arData in arDataList) {
-      final slotX = shelfX + (arData.currentPosition - 1) * bookSlotWidth;
-      final slotCenterX = slotX + bookSlotWidth / 2;
-      
-      // Draw current position indicator
-      final currentPaint = Paint()
-        ..color = arData.isInCorrectOrder 
-            ? Colors.green.withValues(alpha: 0.6)
-            : Colors.orange.withValues(alpha: 0.6)
-        ..style = PaintingStyle.fill;
-      
-      canvas.drawRect(
-        Rect.fromLTWH(slotX, shelfStartY, bookSlotWidth - 2, shelfHeight),
-        currentPaint,
-      );
-      
-      // Draw expected position indicator (if different)
-      if (!arData.isInCorrectOrder) {
-        final expectedX = shelfX + (arData.expectedPosition - 1) * bookSlotWidth;
-        final expectedPaint = Paint()
-          ..color = Colors.green.withValues(alpha: 0.4)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2;
-        
-        canvas.drawRect(
-          Rect.fromLTWH(expectedX, shelfStartY, bookSlotWidth - 2, shelfHeight),
-          expectedPaint,
-        );
-        
-        // Draw arrow from current to expected
-        _drawArrow(
-          canvas,
-          Offset(slotCenterX, shelfStartY + shelfHeight / 2),
-          Offset(expectedX + bookSlotWidth / 2, shelfStartY + shelfHeight / 2),
-          Colors.green,
-        );
-      }
-      
-      // Draw position number
-      final positionText = arData.isInCorrectOrder
-          ? '${arData.currentPosition}'
-          : '${arData.currentPosition}→${arData.expectedPosition}';
-      
-      final textPainter = TextPainter(
-        text: TextSpan(
-          text: positionText,
-          style: TextStyle(
-            color: arData.isInCorrectOrder ? Colors.white : Colors.orange,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => _showScannedBookDetails(r),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              // Shelf badge — most important visual diff between correct/wrong
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: badgeColor,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  shelfBadge,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  r.book.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.white38,
+                size: 20,
+              ),
+            ],
           ),
         ),
-        textDirection: TextDirection.ltr,
-      );
-      textPainter.layout();
-      textPainter.paint(
-        canvas,
-        Offset(
-          slotCenterX - textPainter.width / 2,
-          shelfStartY + shelfHeight / 2 - textPainter.height / 2,
-        ),
-      );
-    }
+      ),
+    );
   }
-  
-  void _drawArrow(Canvas canvas, Offset start, Offset end, Color color) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    
-    canvas.drawLine(start, end, paint);
-    
-    // Draw arrowhead
-    final angle = (end - start).direction;
-    final arrowLength = 8.0;
-    final arrowAngle = 0.5;
-    
-    final arrowEnd1 = Offset(
-      end.dx - arrowLength * math.cos(angle - arrowAngle),
-      end.dy - arrowLength * math.sin(angle - arrowAngle),
-    );
-    final arrowEnd2 = Offset(
-      end.dx - arrowLength * math.cos(angle + arrowAngle),
-      end.dy - arrowLength * math.sin(angle + arrowAngle),
-    );
-    
-    canvas.drawLine(end, arrowEnd1, paint);
-    canvas.drawLine(end, arrowEnd2, paint);
-  }
-  
-  void _drawBookPositionBadge(Canvas canvas, Size size, BookARData arData) {
-    // Draw book badge floating above shelf showing title and position
-    final shelfY = size.height * 0.75;
-    final badgeY = shelfY - 100;
-    
-    // Calculate badge position based on book position
-    final maxPosition = allShelfBooks != null && allShelfBooks!.isNotEmpty
-        ? (allShelfBooks as List).map((b) => b.expectedPosition).reduce((a, b) => a > b ? a : b)
-        : 30;
-    final shelfWidth = size.width * 0.9;
-    final shelfX = (size.width - shelfWidth) / 2;
-    final bookSlotWidth = shelfWidth / math.max(maxPosition, 1);
-    final slotX = shelfX + (arData.currentPosition - 1) * bookSlotWidth;
-    final badgeX = slotX + bookSlotWidth / 2 - 80;
-    
-    // Draw badge background
-    final badgeRect = Rect.fromLTWH(badgeX, badgeY, 160, 80);
-    final badgePaint = Paint()
-      ..color = Color(arData.arOverlay.colorValue).withValues(alpha: 0.9)
-      ..style = PaintingStyle.fill;
-    
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(badgeRect, const Radius.circular(8)),
-      badgePaint,
-    );
-    
-    // Draw badge border
-    final borderPaint = Paint()
-      ..color = Color(arData.arOverlay.colorValue)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(badgeRect, const Radius.circular(8)),
-      borderPaint,
-    );
-    
-    // Draw book title
-    final titlePainter = TextPainter(
-      text: TextSpan(
-        text: arData.book.title.length > 20 
-            ? '${arData.book.title.substring(0, 20)}...'
-            : arData.book.title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
+
+  Future<void> _showScannedBookDetails(_ScannedResult result) async {
+    final location =
+        result.location ??
+        await _firebase.getBookLocation(result.book.isbn, widget.libraryId);
+    if (!mounted) return;
+
+    final floorName = location != null
+        ? ((await _firebase.getFloorById(
+                location.libraryId,
+                location.floorId,
+              ))?.name ??
+              location.floorId)
+        : 'غير محدد';
+    final shelfName = location != null
+        ? ((await _firebase.getShelfByLibraryAndShelfId(
+                location.libraryId,
+                location.shelfId,
+              ))?.name ??
+              location.shelfId)
+        : (result.wrongShelfName ?? 'غير محدد');
+    if (!mounted) return;
+
+    final bool isCorrect = result.isCorrectShelf;
+    final statusColor = isCorrect ? Colors.green : Colors.orange;
+    final statusText = isCorrect ? 'في مكانه الصحيح' : 'ليس في مكانه الصحيح';
+
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    isCorrect ? Icons.check_circle : Icons.warning_rounded,
+                    color: statusColor,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      result.book.title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                statusText,
+                style: TextStyle(
+                  color: statusColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _detailRow('ISBN', result.book.isbn),
+              _detailRow('المؤلف', result.book.author),
+              _detailRow('التصنيف', result.book.category),
+              _detailRow('الطابق', floorName),
+              _detailRow('الرف الصحيح', shelfName),
+              if (location != null) ...[
+                _detailRow('الموقع الحالي', '${location.position}'),
+                _detailRow('الموقع المتوقع', '${location.expectedPosition}'),
+              ],
+              if (!isCorrect)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      'الإجراء: انقل الكتاب إلى الرف $shelfName'
+                      '${location != null ? ' (الموقع ${location.expectedPosition})' : ''}.',
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
-      maxLines: 2,
-      textDirection: TextDirection.ltr,
-    );
-    titlePainter.layout(maxWidth: 150);
-    titlePainter.paint(canvas, Offset(badgeX + 5, badgeY + 5));
-    
-    // Draw position info
-    final positionText = arData.isInCorrectOrder
-        ? '✓ موقع ${arData.currentPosition}'
-        : 'موقع ${arData.currentPosition} → ${arData.expectedPosition}';
-    
-    final positionPainter = TextPainter(
-      text: TextSpan(
-        text: positionText,
-        style: TextStyle(
-          color: arData.isInCorrectOrder ? Colors.white : Colors.orange.shade100,
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    positionPainter.layout();
-    positionPainter.paint(canvas, Offset(badgeX + 5, badgeY + 55));
-    
-    // Draw status icon
-    final iconText = arData.arOverlay.badgeSymbol;
-    final iconPainter = TextPainter(
-      text: TextSpan(
-        text: iconText,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    iconPainter.layout();
-    iconPainter.paint(canvas, Offset(badgeX + 135, badgeY + 30));
-    
-    // Draw line connecting to shelf position
-    final linePaint = Paint()
-      ..color = Color(arData.arOverlay.colorValue).withValues(alpha: 0.5)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    
-    final shelfConnectionX = slotX + bookSlotWidth / 2;
-    canvas.drawLine(
-      Offset(badgeX + 80, badgeY + 80),
-      Offset(shelfConnectionX, shelfY),
-      linePaint,
     );
   }
 
-  void _drawShelfBoundary(Canvas canvas, Size size, BookARData arData) {
-    final paint = Paint()
-      ..color = Color(arData.arOverlay.colorValue).withValues(alpha: 0.5)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-
-    // Dessiner une boîte autour du rayon (approximation 2D)
-    final shelfX = size.width / 2 - 60;
-    final shelfY = size.height / 2 - 40;
-    final shelfWidth = 120.0;
-    final shelfHeight = 80.0;
-
-    canvas.drawRect(
-      Rect.fromLTWH(shelfX, shelfY, shelfWidth, shelfHeight),
-      paint,
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.black54,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: Colors.black87,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-
-  @override
-  bool shouldRepaint(AROverlayPainter oldDelegate) {
-    return oldDelegate.arDataList != arDataList || 
-           oldDelegate.allShelfBooks != allShelfBooks;
+  Widget _buildScanGuide() {
+    return IgnorePointer(
+      child: Align(
+        // Horizontal band across the middle of the camera — matches how
+        // you hold the phone to sweep across a row of books on a shelf.
+        alignment: const Alignment(0, -0.15),
+        child: AnimatedBuilder(
+          animation: _pulseAnimation,
+          builder: (context, child) =>
+              Transform.scale(scale: _pulseAnimation.value, child: child),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              height: 110,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF38ada9).withValues(alpha: 0.9),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF38ada9).withValues(alpha: 0.25),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Stack(
+                children: [
+                  // Corner accents (top-left, top-right, bottom-left, bottom-right)
+                  for (final align in [
+                    Alignment.topLeft,
+                    Alignment.topRight,
+                    Alignment.bottomLeft,
+                    Alignment.bottomRight,
+                  ])
+                    Align(
+                      alignment: align,
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          border: Border(
+                            top: align.y < 0
+                                ? const BorderSide(
+                                    color: Colors.white,
+                                    width: 3,
+                                  )
+                                : BorderSide.none,
+                            bottom: align.y > 0
+                                ? const BorderSide(
+                                    color: Colors.white,
+                                    width: 3,
+                                  )
+                                : BorderSide.none,
+                            left: align.x < 0
+                                ? const BorderSide(
+                                    color: Colors.white,
+                                    width: 3,
+                                  )
+                                : BorderSide.none,
+                            right: align.x > 0
+                                ? const BorderSide(
+                                    color: Colors.white,
+                                    width: 3,
+                                  )
+                                : BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                  // Label
+                  Align(
+                    alignment: Alignment.center,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Text(
+                        'وجّه الكاميرا نحو صف الكتب — يقرأ عدة باركود دفعة واحدة',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

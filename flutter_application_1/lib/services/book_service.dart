@@ -1,9 +1,28 @@
 import '../models/book.dart';
+import 'firebase_service.dart';
 
-/// Service de gestion des livres scannés
+/// Service de gestion des livres scannés, backed by local SQLite.
 class BookService {
+  final FirebaseService _firebase = FirebaseService();
   final List<Book> _scannedBooks = [];
   int _currentOrder = 1;
+
+  BookService() {
+    _loadFromDatabase();
+  }
+
+  Future<void> _loadFromDatabase() async {
+    final books = await _firebase.searchBooks('');
+    _scannedBooks
+      ..clear()
+      ..addAll(
+        books
+            .where((book) => book.scannedAt != null || (book.order ?? 0) > 0)
+            .toList()
+          ..sort((a, b) => (a.order ?? 0).compareTo(b.order ?? 0)),
+      );
+    _currentOrder = _scannedBooks.length + 1;
+  }
 
   /// Liste de tous les livres scannés (en lecture seule)
   List<Book> get scannedBooks => List.unmodifiable(_scannedBooks);
@@ -38,18 +57,23 @@ class BookService {
     );
 
     _scannedBooks.add(book);
+    _firebase.saveBook(book);
     return book;
   }
 
   /// Supprime un livre par son ISBN/code-barres
   void removeBook(String isbn) {
     _scannedBooks.removeWhere((book) => book.isbn == isbn);
+    _firebase.deleteBook(isbn);
     // Réorganiser les ordres
     _reorderBooks();
   }
 
   /// Supprime tous les livres scannés
   void clearAll() {
+    for (final book in _scannedBooks) {
+      _firebase.deleteBook(book.isbn);
+    }
     _scannedBooks.clear();
     _currentOrder = 1;
   }
@@ -59,6 +83,7 @@ class BookService {
     _scannedBooks.sort((a, b) => (a.order ?? 0).compareTo(b.order ?? 0));
     for (int i = 0; i < _scannedBooks.length; i++) {
       _scannedBooks[i] = _scannedBooks[i].copyWith(order: i + 1);
+      _firebase.saveBook(_scannedBooks[i]);
     }
     _currentOrder = _scannedBooks.length + 1;
   }
@@ -69,4 +94,3 @@ class BookService {
       ..sort((a, b) => (a.order ?? 0).compareTo(b.order ?? 0));
   }
 }
-

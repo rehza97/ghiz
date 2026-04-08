@@ -1,273 +1,373 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
-import '../models/library.dart';
-import '../models/floor.dart';
-import '../models/shelf.dart';
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:sqflite/sqflite.dart';
+
 import '../models/book.dart';
 import '../models/book_location.dart';
+import '../models/floor.dart';
+import '../models/library.dart';
+import '../models/shelf.dart';
+import 'local_database_service.dart';
 
-/// Service pour interagir avec Firebase Firestore (base "book" comme le dashboard web)
+/// SQLite-backed local data service used across the app.
 class FirebaseService {
-  static FirebaseFirestore get _firestore => FirebaseFirestore.instanceFor(
-        app: Firebase.app(),
-        databaseId: 'book',
-      );
+  static final StreamController<void> _booksChangedController =
+      StreamController<void>.broadcast();
+
+  static Stream<void> get booksChanges => _booksChangedController.stream;
+
+  Future<Database> get _db async => LocalDatabaseService.instance.database;
 
   // ==================== Libraries ====================
 
-  /// Récupère toutes les bibliothèques actives
   Future<List<Library>> getLibraries({String? wilaya}) async {
-    try {
-      Query query = _firestore.collection('libraries').where('isActive', isEqualTo: true);
-
-      if (wilaya != null && wilaya != 'Tous' && wilaya != 'الكل') {
-        query = query.where('wilaya', isEqualTo: wilaya);
-      }
-
-      final snapshot = await query.get();
-      return snapshot.docs.map((doc) => Library.fromFirestore(doc)).toList();
-    } catch (e) {
-      throw Exception('خطأ في جلب المكتبات: $e');
-    }
+    final db = await _db;
+    final rows = await db.query(
+      'libraries',
+      where: (wilaya == null || wilaya == 'Tous' || wilaya == 'الكل')
+          ? null
+          : 'city = ?',
+      whereArgs: (wilaya == null || wilaya == 'Tous' || wilaya == 'الكل')
+          ? null
+          : [wilaya],
+      orderBy: 'name COLLATE NOCASE ASC',
+    );
+    return rows.map(_libraryFromRow).toList();
   }
 
-  /// Récupère une bibliothèque par ID
   Future<Library?> getLibraryById(String libraryId) async {
-    try {
-      final doc = await _firestore.collection('libraries').doc(libraryId).get();
-      if (!doc.exists) return null;
-      return Library.fromFirestore(doc);
-    } catch (e) {
-      throw Exception('خطأ في جلب المكتبة: $e');
-    }
+    final db = await _db;
+    final rows = await db.query(
+      'libraries',
+      where: 'id = ?',
+      whereArgs: [libraryId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return _libraryFromRow(rows.first);
   }
 
-  /// Crée ou met à jour une bibliothèque (Admin seulement)
   Future<void> saveLibrary(Library library) async {
-    try {
-      await _firestore.collection('libraries').doc(library.id).set(
-        library.toFirestore(),
-        SetOptions(merge: true),
-      );
-    } catch (e) {
-      throw Exception('خطأ في حفظ المكتبة: $e');
-    }
+    final db = await _db;
+    await db.insert(
+      'libraries',
+      _libraryToRow(library),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   // ==================== Floors ====================
 
-  /// Récupère tous les étages d'une bibliothèque
   Future<List<Floor>> getFloorsByLibrary(String libraryId) async {
-    try {
-      final snapshot = await _firestore
-          .collection('libraries')
-          .doc(libraryId)
-          .collection('floors')
-          .orderBy('floorNumber')
-          .get();
-
-      return snapshot.docs.map((doc) => Floor.fromFirestore(doc)).toList();
-    } catch (e) {
-      throw Exception('خطأ في جلب الطوابق: $e');
-    }
+    final db = await _db;
+    final rows = await db.query(
+      'floors',
+      where: 'libraryId = ?',
+      whereArgs: [libraryId],
+      orderBy: 'floorNumber ASC',
+    );
+    return rows.map(_floorFromRow).toList();
   }
 
-  /// Récupère un étage par ID
   Future<Floor?> getFloorById(String libraryId, String floorId) async {
-    try {
-      final doc = await _firestore
-          .collection('libraries')
-          .doc(libraryId)
-          .collection('floors')
-          .doc(floorId)
-          .get();
+    final db = await _db;
+    final rows = await db.query(
+      'floors',
+      where: 'id = ? AND libraryId = ?',
+      whereArgs: [floorId, libraryId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return _floorFromRow(rows.first);
+  }
 
-      if (!doc.exists) return null;
-      return Floor.fromFirestore(doc);
-    } catch (e) {
-      throw Exception('خطأ في جلب الطابق: $e');
-    }
+  Future<void> saveFloor(Floor floor) async {
+    final db = await _db;
+    await db.insert(
+      'floors',
+      _floorToRow(floor),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   // ==================== Shelves ====================
 
-  /// Récupère tous les rayons d'un étage
-  Future<List<Shelf>> getShelvesByFloor(String libraryId, String floorId) async {
-    try {
-      final snapshot = await _firestore
-          .collection('libraries')
-          .doc(libraryId)
-          .collection('floors')
-          .doc(floorId)
-          .collection('shelves')
-          .where('isActive', isEqualTo: true)
-          .get();
-
-      return snapshot.docs.map((doc) => Shelf.fromFirestore(doc)).toList();
-    } catch (e) {
-      throw Exception('خطأ في جلب الرفوف: $e');
-    }
+  Future<List<Shelf>> getShelvesByFloor(
+    String libraryId,
+    String floorId,
+  ) async {
+    final db = await _db;
+    final rows = await db.query(
+      'shelves',
+      where: 'libraryId = ? AND floorId = ?',
+      whereArgs: [libraryId, floorId],
+      orderBy: 'name COLLATE NOCASE ASC',
+    );
+    return rows.map(_shelfFromRow).toList();
   }
 
-  /// Récupère un rayon par ID
-  Future<Shelf?> getShelfById(String libraryId, String floorId, String shelfId) async {
-    try {
-      final doc = await _firestore
-          .collection('libraries')
-          .doc(libraryId)
-          .collection('floors')
-          .doc(floorId)
-          .collection('shelves')
-          .doc(shelfId)
-          .get();
-
-      if (!doc.exists) return null;
-      return Shelf.fromFirestore(doc);
-    } catch (e) {
-      throw Exception('خطأ في جلب الرف: $e');
-    }
+  Future<List<Shelf>> getShelvesByLibrary(String libraryId) async {
+    final db = await _db;
+    final rows = await db.query(
+      'shelves',
+      where: 'libraryId = ?',
+      whereArgs: [libraryId],
+      orderBy: 'name COLLATE NOCASE ASC',
+    );
+    return rows.map(_shelfFromRow).toList();
   }
 
-  /// Récupère un rayon par libraryId et shelfId (sans floorId) en parcourant les étages
-  Future<Shelf?> getShelfByLibraryAndShelfId(String libraryId, String shelfId) async {
-    try {
-      final floors = await getFloorsByLibrary(libraryId);
-      for (final floor in floors) {
-        final shelves = await getShelvesByFloor(libraryId, floor.id);
-        final match = shelves.where((s) => s.id == shelfId).toList();
-        if (match.isNotEmpty) return match.first;
-      }
-      return null;
-    } catch (e) {
-      throw Exception('خطأ في جلب الرف: $e');
-    }
+  Future<Shelf?> getShelfById(
+    String libraryId,
+    String floorId,
+    String shelfId,
+  ) async {
+    final db = await _db;
+    final rows = await db.query(
+      'shelves',
+      where: 'id = ? AND libraryId = ? AND floorId = ?',
+      whereArgs: [shelfId, libraryId, floorId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return _shelfFromRow(rows.first);
+  }
+
+  Future<Shelf?> getShelfByLibraryAndShelfId(
+    String libraryId,
+    String shelfId,
+  ) async {
+    final db = await _db;
+    final rows = await db.query(
+      'shelves',
+      where: 'id = ? AND libraryId = ?',
+      whereArgs: [shelfId, libraryId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return _shelfFromRow(rows.first);
+  }
+
+  Future<void> saveShelf(Shelf shelf) async {
+    final db = await _db;
+    await db.insert(
+      'shelves',
+      _shelfToRow(shelf),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   // ==================== Books ====================
 
-  /// Récupère un livre par ISBN
   Future<Book?> getBookByIsbn(String isbn) async {
-    try {
-      final doc = await _firestore.collection('books').doc(isbn).get();
-      if (!doc.exists) return null;
-      return Book.fromFirestore(doc);
-    } catch (e) {
-      throw Exception('خطأ في جلب الكتاب: $e');
-    }
+    final db = await _db;
+    final rows = await db.query(
+      'books',
+      where: 'isbn = ?',
+      whereArgs: [isbn],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return _bookFromRow(rows.first);
   }
 
-  /// Recherche des livres
-  Future<List<Book>> searchBooks(String query) async {
-    try {
-      // Note: Firestore doesn't support full-text search natively
-      // For production, consider using Algolia or similar
-      final snapshot = await _firestore
-          .collection('books')
-          .where('isActive', isEqualTo: true)
-          .limit(50)
-          .get();
+  Future<List<Book>> searchBooks(String query, {String? libraryId}) async {
+    final db = await _db;
+    final rows = await db.query('books');
+    final books = rows.map(_bookFromRow).toList();
+    if (query.trim().isEmpty) return books;
+    final lower = query.toLowerCase();
 
-      final allBooks = snapshot.docs.map((doc) => Book.fromFirestore(doc)).toList();
+    Map<String, BookLocation> locationByIsbn = {};
+    Map<String, String> shelfNameById = {};
+    Map<String, String> floorNameById = {};
 
-      // Client-side filtering (temporary solution)
-      final lowerQuery = query.toLowerCase();
-      return allBooks.where((book) {
-        return book.title.toLowerCase().contains(lowerQuery) ||
-            book.author.toLowerCase().contains(lowerQuery) ||
-            book.isbn.contains(query);
-      }).toList();
-    } catch (e) {
-      throw Exception('خطأ في البحث: $e');
-    }
-  }
-
-  /// Récupère les livres par catégorie
-  Future<List<Book>> getBooksByCategory(String category) async {
-    try {
-      final snapshot = await _firestore
-          .collection('books')
-          .where('category', isEqualTo: category)
-          .where('isActive', isEqualTo: true)
-          .get();
-
-      return snapshot.docs.map((doc) => Book.fromFirestore(doc)).toList();
-    } catch (e) {
-      throw Exception('خطأ في جلب الكتب: $e');
-    }
-  }
-
-  /// Crée ou met à jour un livre (Admin seulement)
-  Future<void> saveBook(Book book) async {
-    try {
-      await _firestore.collection('books').doc(book.isbn).set(
-        book.toFirestore(),
-        SetOptions(merge: true),
+    if (libraryId != null) {
+      final locationRows = await db.query(
+        'book_locations',
+        where: 'libraryId = ?',
+        whereArgs: [libraryId],
       );
-    } catch (e) {
-      throw Exception('خطأ في حفظ الكتاب: $e');
+      locationByIsbn = {
+        for (final row in locationRows)
+          row['bookIsbn'].toString(): _bookLocationFromRow(row),
+      };
+
+      final shelfRows = await db.query(
+        'shelves',
+        where: 'libraryId = ?',
+        whereArgs: [libraryId],
+      );
+      shelfNameById = {
+        for (final row in shelfRows)
+          row['id'].toString(): row['name'].toString(),
+      };
+
+      final floorRows = await db.query(
+        'floors',
+        where: 'libraryId = ?',
+        whereArgs: [libraryId],
+      );
+      floorNameById = {
+        for (final row in floorRows)
+          row['id'].toString(): row['name'].toString(),
+      };
     }
+
+    return books.where((b) {
+      final baseMatch =
+          b.title.toLowerCase().contains(lower) ||
+          b.author.toLowerCase().contains(lower) ||
+          b.category.toLowerCase().contains(lower) ||
+          b.isbn.toLowerCase().contains(lower);
+      if (baseMatch) return true;
+
+      final loc = locationByIsbn[b.isbn];
+      if (loc == null) return false;
+      final shelfName = (shelfNameById[loc.shelfId] ?? '').toLowerCase();
+      final floorName = (floorNameById[loc.floorId] ?? '').toLowerCase();
+      return loc.shelfId.toLowerCase().contains(lower) ||
+          loc.floorId.toLowerCase().contains(lower) ||
+          shelfName.contains(lower) ||
+          floorName.contains(lower) ||
+          loc.position.toString().contains(lower) ||
+          loc.expectedPosition.toString().contains(lower);
+    }).toList();
+  }
+
+  Future<List<Book>> getBooksByCategory(String category) async {
+    final db = await _db;
+    final rows = await db.query(
+      'books',
+      where: 'category = ?',
+      whereArgs: [category],
+      orderBy: 'title COLLATE NOCASE ASC',
+    );
+    return rows.map(_bookFromRow).toList();
+  }
+
+  /// Returns books that have been scanned (scannedAt IS NOT NULL),
+  /// most recently scanned first.
+  Future<List<Book>> getScannedBooks() async {
+    final db = await _db;
+    final rows = await db.query(
+      'books',
+      where: 'scannedAt IS NOT NULL',
+      orderBy: 'scannedAt DESC',
+    );
+    return rows.map(_bookFromRow).toList();
+  }
+
+  /// Stamps a book's scannedAt to now, recording it was seen by the scanner.
+  Future<void> markBookAsScanned(String isbn) async {
+    final db = await _db;
+    await db.update(
+      'books',
+      {'scannedAt': DateTime.now().toIso8601String()},
+      where: 'isbn = ?',
+      whereArgs: [isbn],
+    );
+  }
+
+  /// Clears the scannedAt timestamp for all books (resets scan history).
+  Future<void> clearScanHistory() async {
+    final db = await _db;
+    await db.update('books', {'scannedAt': null});
+  }
+
+  /// Returns true if an ISBN is already taken by another book.
+  Future<bool> isbnExists(String isbn) async {
+    final db = await _db;
+    final rows = await db.query(
+      'books',
+      columns: ['isbn'],
+      where: 'isbn = ?',
+      whereArgs: [isbn],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
+  }
+
+  Future<void> saveBook(Book book) async {
+    final db = await _db;
+    await db.insert(
+      'books',
+      _bookToRow(book),
+      // Replace only when explicitly editing an existing book (same ISBN).
+      // New books with a duplicate ISBN will throw — callers should check
+      // isbnExists() first or catch the exception.
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    _booksChangedController.add(null);
+  }
+
+  Future<void> deleteBook(String isbn) async {
+    final db = await _db;
+    await db.delete('books', where: 'isbn = ?', whereArgs: [isbn]);
+    await db.delete('book_locations', where: 'bookIsbn = ?', whereArgs: [isbn]);
+    _booksChangedController.add(null);
   }
 
   // ==================== Book Locations ====================
 
-  /// Récupère la localisation d'un livre
   Future<BookLocation?> getBookLocation(String isbn, String libraryId) async {
-    try {
-      final snapshot = await _firestore
-          .collection('book_locations')
-          .where('bookIsbn', isEqualTo: isbn)
-          .where('libraryId', isEqualTo: libraryId)
-          .limit(1)
-          .get();
-
-      if (snapshot.docs.isEmpty) return null;
-      return BookLocation.fromFirestore(snapshot.docs.first);
-    } catch (e) {
-      throw Exception('خطأ في جلب الموقع: $e');
+    final db = await _db;
+    var rows = await db.query(
+      'book_locations',
+      where: 'bookIsbn = ? AND libraryId = ?',
+      whereArgs: [isbn, libraryId],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      // Fallback for cases where current UI library context differs from
+      // the seeded/actual library that owns this book location.
+      rows = await db.query(
+        'book_locations',
+        where: 'bookIsbn = ?',
+        whereArgs: [isbn],
+        limit: 1,
+      );
     }
+    if (rows.isEmpty) return null;
+    return _bookLocationFromRow(rows.first);
   }
 
-  /// Récupère tous les livres d'un rayon
-  Future<List<BookLocation>> getShelfBooks(String libraryId, String shelfId) async {
-    try {
-      final snapshot = await _firestore
-          .collection('book_locations')
-          .where('libraryId', isEqualTo: libraryId)
-          .where('shelfId', isEqualTo: shelfId)
-          .orderBy('position')
-          .get();
-
-      return snapshot.docs.map((doc) => BookLocation.fromFirestore(doc)).toList();
-    } catch (e) {
-      throw Exception('خطأ في جلب كتب الرف: $e');
-    }
+  Future<List<BookLocation>> getShelfBooks(
+    String libraryId,
+    String shelfId,
+  ) async {
+    final db = await _db;
+    final rows = await db.query(
+      'book_locations',
+      where: 'libraryId = ? AND shelfId = ?',
+      whereArgs: [libraryId, shelfId],
+      orderBy: 'position ASC',
+    );
+    return rows.map(_bookLocationFromRow).toList();
   }
 
-  /// Met à jour la position d'un livre
+  Future<List<BookLocation>> getBookLocationsByLibrary(String libraryId) async {
+    final db = await _db;
+    final rows = await db.query(
+      'book_locations',
+      where: 'libraryId = ?',
+      whereArgs: [libraryId],
+    );
+    return rows.map(_bookLocationFromRow).toList();
+  }
+
   Future<void> updateBookPosition(BookLocation location) async {
-    try {
-      // Find existing location document
-      final snapshot = await _firestore
-          .collection('book_locations')
-          .where('bookIsbn', isEqualTo: location.bookIsbn)
-          .where('libraryId', isEqualTo: location.libraryId)
-          .where('shelfId', isEqualTo: location.shelfId)
-          .limit(1)
-          .get();
-
-      if (snapshot.docs.isNotEmpty) {
-        await snapshot.docs.first.reference.update(location.toFirestore());
-      } else {
-        await _firestore.collection('book_locations').add(location.toFirestore());
-      }
-    } catch (e) {
-      throw Exception('خطأ في تحديث الموقع: $e');
-    }
+    final db = await _db;
+    await db.insert(
+      'book_locations',
+      _bookLocationToRow(location),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
-  // ==================== Scans ====================
+  // ==================== Scans / Corrections ====================
 
-  /// Enregistre un scan
   Future<String> saveScan({
     required String libraryId,
     required String shelfId,
@@ -275,109 +375,240 @@ class FirebaseService {
     required List<Map<String, dynamic>> scannedBooks,
     String? userId,
   }) async {
-    try {
-      final scanData = {
-        'libraryId': libraryId,
-        'shelfId': shelfId,
-        'floorId': floorId,
-        'scannedBooks': scannedBooks,
-        'totalScanned': scannedBooks.length,
-        'correctCount': scannedBooks.where((b) => b['isCorrect'] == true).length,
-        'errorCount': scannedBooks.where((b) => b['isCorrect'] == false).length,
-        'accuracy': scannedBooks.isEmpty
-            ? 0.0
-            : (scannedBooks.where((b) => b['isCorrect'] == true).length /
-                    scannedBooks.length *
-                    100),
-        'createdAt': FieldValue.serverTimestamp(),
-        if (userId != null) 'userId': userId,
-      };
-
-      final docRef = await _firestore.collection('scans').add(scanData);
-      return docRef.id;
-    } catch (e) {
-      throw Exception('خطأ في تسجيل المسح: $e');
-    }
+    final db = await _db;
+    final id = 'scan_${DateTime.now().microsecondsSinceEpoch}';
+    await db.insert('scans', {
+      'id': id,
+      'libraryId': libraryId,
+      'shelfId': shelfId,
+      'floorId': floorId,
+      'scannedBooksJson': jsonEncode(scannedBooks),
+      'userId': userId,
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+    return id;
   }
 
-  // ==================== Corrections ====================
-
-  /// Enregistre une correction
   Future<String> saveCorrection({
     required String libraryId,
     required String shelfId,
     required List<Map<String, dynamic>> movements,
     String? userId,
   }) async {
-    try {
-      final correctionData = {
-        'libraryId': libraryId,
-        'shelfId': shelfId,
-        'status': 'in_progress',
-        'totalMoves': movements.length,
-        'completedMoves': 0,
-        'progressPercentage': 0.0,
-        'movements': movements,
-        'startedAt': FieldValue.serverTimestamp(),
-        'createdAt': FieldValue.serverTimestamp(),
-        if (userId != null) 'userId': userId,
-      };
-
-      final docRef = await _firestore.collection('corrections').add(correctionData);
-      return docRef.id;
-    } catch (e) {
-      throw Exception('خطأ في تسجيل التصحيح: $e');
-    }
+    final db = await _db;
+    final id = 'correction_${DateTime.now().microsecondsSinceEpoch}';
+    final now = DateTime.now().toIso8601String();
+    await db.insert('corrections', {
+      'id': id,
+      'libraryId': libraryId,
+      'shelfId': shelfId,
+      'movementsJson': jsonEncode(movements),
+      'status': 'in_progress',
+      'userId': userId,
+      'createdAt': now,
+      'updatedAt': now,
+    });
+    return id;
   }
 
-  /// Met à jour une correction
-  Future<void> updateCorrection(String correctionId, Map<String, dynamic> updates) async {
-    try {
-      await _firestore.collection('corrections').doc(correctionId).update({
-        ...updates,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      throw Exception('خطأ في تحديث التصحيح: $e');
+  Future<void> updateCorrection(
+    String correctionId,
+    Map<String, dynamic> updates,
+  ) async {
+    final db = await _db;
+    final payload = <String, Object?>{
+      'updatedAt': DateTime.now().toIso8601String(),
+    };
+    if (updates.containsKey('status')) payload['status'] = updates['status'];
+    if (updates.containsKey('movements')) {
+      payload['movementsJson'] = jsonEncode(updates['movements']);
     }
+    await db.update(
+      'corrections',
+      payload,
+      where: 'id = ?',
+      whereArgs: [correctionId],
+    );
+  }
+
+  Future<String> saveIsbnLabel({
+    required String isbn,
+    required String title,
+    required String labelText,
+  }) async {
+    final db = await _db;
+    final id = 'label_${DateTime.now().microsecondsSinceEpoch}';
+    await db.insert('isbn_labels', {
+      'id': id,
+      'isbn': isbn,
+      'title': title,
+      'labelText': labelText,
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+    return id;
   }
 
   // ==================== Real-time Listeners ====================
 
-  /// Écoute les changements d'une bibliothèque en temps réel
-  Stream<Library?> watchLibrary(String libraryId) {
-    return _firestore
-        .collection('libraries')
-        .doc(libraryId)
-        .snapshots()
-        .map((doc) => doc.exists ? Library.fromFirestore(doc) : null);
+  Stream<Library?> watchLibrary(String libraryId) async* {
+    yield await getLibraryById(libraryId);
   }
 
-  /// Écoute les changements d'un rayon en temps réel
-  Stream<Shelf?> watchShelf(String libraryId, String floorId, String shelfId) {
-    return _firestore
-        .collection('libraries')
-        .doc(libraryId)
-        .collection('floors')
-        .doc(floorId)
-        .collection('shelves')
-        .doc(shelfId)
-        .snapshots()
-        .map((doc) => doc.exists ? Shelf.fromFirestore(doc) : null);
+  Stream<Shelf?> watchShelf(
+    String libraryId,
+    String floorId,
+    String shelfId,
+  ) async* {
+    yield await getShelfById(libraryId, floorId, shelfId);
   }
 
-  /// Écoute les livres d'un rayon en temps réel
-  Stream<List<BookLocation>> watchShelfBooks(String libraryId, String shelfId) {
-    return _firestore
-        .collection('book_locations')
-        .where('libraryId', isEqualTo: libraryId)
-        .where('shelfId', isEqualTo: shelfId)
-        .orderBy('position')
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => BookLocation.fromFirestore(doc))
-            .toList());
+  Stream<List<BookLocation>> watchShelfBooks(
+    String libraryId,
+    String shelfId,
+  ) async* {
+    yield await getShelfBooks(libraryId, shelfId);
   }
+
+  // ==================== Row mappers ====================
+
+  Library _libraryFromRow(Map<String, Object?> row) => Library.fromJson({
+    'id': row['id'],
+    'name': row['name'],
+    'address': row['address'],
+    'postalCode': row['postalCode'],
+    'city': row['city'],
+    'phone': row['phone'],
+    'email': row['email'],
+    'floorCount': row['floorCount'],
+    'latitude': row['latitude'],
+    'longitude': row['longitude'],
+    'logoUrl': row['logoUrl'],
+    'hours': row['hours'],
+    'description': row['description'],
+  });
+
+  Map<String, Object?> _libraryToRow(Library library) => {
+    'id': library.id,
+    'name': library.name,
+    'address': library.address,
+    'postalCode': library.postalCode,
+    'city': library.city,
+    'phone': library.phone,
+    'email': library.email,
+    'floorCount': library.floorCount,
+    'latitude': library.latitude,
+    'longitude': library.longitude,
+    'logoUrl': library.logoUrl,
+    'hours': library.hours,
+    'description': library.description,
+  };
+
+  Floor _floorFromRow(Map<String, Object?> row) => Floor.fromJson({
+    'id': row['id'],
+    'name': row['name'],
+    'floorNumber': row['floorNumber'],
+    'libraryId': row['libraryId'],
+    'mapAssetPath': row['mapAssetPath'],
+    'description': row['description'],
+    'shelfCount': row['shelfCount'],
+    'mapWidth': row['mapWidth'],
+    'mapHeight': row['mapHeight'],
+  });
+
+  Map<String, Object?> _floorToRow(Floor floor) => {
+    'id': floor.id,
+    'name': floor.name,
+    'floorNumber': floor.floorNumber,
+    'libraryId': floor.libraryId,
+    'mapAssetPath': floor.mapAssetPath,
+    'description': floor.description,
+    'shelfCount': floor.shelfCount,
+    'mapWidth': floor.mapWidth,
+    'mapHeight': floor.mapHeight,
+  };
+
+  Shelf _shelfFromRow(Map<String, Object?> row) => Shelf.fromJson({
+    'id': row['id'],
+    'name': row['name'],
+    'floorId': row['floorId'],
+    'libraryId': row['libraryId'],
+    'x': row['x'],
+    'y': row['y'],
+    'z': row['z'],
+    'width': row['width'],
+    'height': row['height'],
+    'depth': row['depth'],
+    'category': row['category'],
+    'capacity': row['capacity'],
+    'currentCount': row['currentCount'],
+    'description': row['description'],
+  });
+
+  Map<String, Object?> _shelfToRow(Shelf shelf) => {
+    'id': shelf.id,
+    'name': shelf.name,
+    'floorId': shelf.floorId,
+    'libraryId': shelf.libraryId,
+    'x': shelf.x,
+    'y': shelf.y,
+    'z': shelf.z,
+    'width': shelf.width,
+    'height': shelf.height,
+    'depth': shelf.depth,
+    'category': shelf.category,
+    'capacity': shelf.capacity,
+    'currentCount': shelf.currentCount,
+    'description': shelf.description,
+  };
+
+  Book _bookFromRow(Map<String, Object?> row) => Book.fromJson({
+    'isbn': row['isbn'],
+    'title': row['title'],
+    'author': row['author'],
+    'category': row['category'],
+    'coverUrl': row['coverUrl'],
+    'description': row['description'],
+    'scannedAt': row['scannedAt'],
+    'order': row['orderIndex'],
+  });
+
+  Map<String, Object?> _bookToRow(Book book) => {
+    'isbn': book.isbn,
+    'title': book.title,
+    'author': book.author,
+    'category': book.category,
+    'coverUrl': book.coverUrl,
+    'description': book.description,
+    'scannedAt': book.scannedAt?.toIso8601String(),
+    'orderIndex': book.order,
+  };
+
+  BookLocation _bookLocationFromRow(Map<String, Object?> row) =>
+      BookLocation.fromJson({
+        'bookIsbn': row['bookIsbn'],
+        'libraryId': row['libraryId'],
+        'floorId': row['floorId'],
+        'shelfId': row['shelfId'],
+        'position': row['position'],
+        'expectedPosition': row['expectedPosition'],
+        'isCorrectOrder': (row['isCorrectOrder'] as int? ?? 0) == 1,
+        'isFlagged': (row['isFlagged'] as int? ?? 0) == 1,
+        'reason': row['reason'],
+        'lastCheckedAt': row['lastCheckedAt'],
+        'misplacementCount': row['misplacementCount'],
+      });
+
+  Map<String, Object?> _bookLocationToRow(BookLocation location) => {
+    'bookIsbn': location.bookIsbn,
+    'libraryId': location.libraryId,
+    'floorId': location.floorId,
+    'shelfId': location.shelfId,
+    'position': location.position,
+    'expectedPosition': location.expectedPosition,
+    'isCorrectOrder': location.isCorrectOrder ? 1 : 0,
+    'isFlagged': location.isFlagged ? 1 : 0,
+    'reason': location.reason,
+    'lastCheckedAt': location.lastCheckedAt?.toIso8601String(),
+    'misplacementCount': location.misplacementCount,
+  };
 }
-
-

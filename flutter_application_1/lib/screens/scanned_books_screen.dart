@@ -1,389 +1,272 @@
 import 'package:flutter/material.dart';
-import '../services/book_service.dart';
 
-/// Écran affichant l'historique des livres scannés
+import '../models/book.dart';
+import '../models/library.dart';
+import '../models/shelf.dart';
+import '../services/firebase_service.dart';
+import 'ar_book_detection_screen.dart';
+
 class ScannedBooksScreen extends StatefulWidget {
-  final BookService bookService;
+  final Library library;
 
-  const ScannedBooksScreen({
-    super.key,
-    required this.bookService,
-  });
+  const ScannedBooksScreen({super.key, required this.library});
 
   @override
   State<ScannedBooksScreen> createState() => _ScannedBooksScreenState();
 }
 
 class _ScannedBooksScreenState extends State<ScannedBooksScreen> {
+  final FirebaseService _firebase = FirebaseService();
+  List<Book> _books = [];
+  bool _loading = true;
+  bool _openingScanner = false;
+
   @override
-  Widget build(BuildContext context) {
-    final books = widget.bookService.getBooksInOrder();
+  void initState() {
+    super.initState();
+    _loadBooks();
+  }
 
-    return Scaffold(
-      body: books.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.qr_code_2,
-                    size: 80,
-                    color: Colors.grey[300],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'لا توجد كتب ممسوحة',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'ابدأ بمسح الكتب',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey[500],
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : CustomScrollView(
-              slivers: [
-                // Header
-                SliverToBoxAdapter(
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          const Color(0xFF38ada9),
-                          const Color(0xFF38ada9).withValues(alpha: 0.8),
-                        ],
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'الكتب الممسوحة',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          books.length == 1 ? 'كتاب واحد' : '${books.length} كتب',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+  Future<void> _loadBooks() async {
+    final books = await _firebase.getScannedBooks();
+    if (!mounted) return;
+    setState(() {
+      _books = books;
+      _loading = false;
+    });
+  }
 
-                // Stats
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _buildStatCard(
-                            icon: Icons.collections_bookmark,
-                            value: '${books.length}',
-                            label: 'المجموع',
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildStatCard(
-                            icon: Icons.check_circle,
-                            value: '${books.length}',
-                            label: 'فريدة',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+  Future<void> _clearHistory() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('مسح السجل'),
+        content: const Text('هل تريد مسح سجل المسح كاملاً؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('مسح'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _firebase.clearScanHistory();
+    await _loadBooks();
+  }
 
-                // Books list
-                SliverPadding(
-                  padding: const EdgeInsets.all(16),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final book = books[index];
-                        return _buildBookTile(book, index);
-                      },
-                      childCount: books.length,
-                    ),
-                  ),
-                ),
+  Future<void> _openScanner() async {
+    if (_openingScanner) return;
+    setState(() => _openingScanner = true);
+    try {
+      final shelves = await _getAllShelves();
+      if (!mounted) return;
+      if (shelves.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('لا توجد رفوف. أضف رفاً أولاً')),
+        );
+        return;
+      }
 
-                // Actions
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: _showClearDialog,
-                          icon: const Icon(Icons.delete_sweep),
-                          label: const Text('مسح الكل'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
+      final shelf = shelves.length == 1
+          ? shelves.first
+          : await _pickShelf(shelves);
+      if (!mounted || shelf == null) return;
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ARBookDetectionScreen(
+            shelfId: shelf.id,
+            libraryId: widget.library.id,
+          ),
+        ),
+      );
+      // Refresh list when coming back
+      await _loadBooks();
+    } finally {
+      if (mounted) setState(() => _openingScanner = false);
+    }
+  }
+
+  Future<List<Shelf>> _getAllShelves() async {
+    final floors =
+        await _firebase.getFloorsByLibrary(widget.library.id);
+    final shelves = <Shelf>[];
+    for (final floor in floors) {
+      shelves.addAll(
+          await _firebase.getShelvesByFloor(widget.library.id, floor.id));
+    }
+    return shelves;
+  }
+
+  Future<Shelf?> _pickShelf(List<Shelf> shelves) {
+    return showModalBottomSheet<Shelf>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView.separated(
+          shrinkWrap: true,
+          itemCount: shelves.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (context, i) {
+            final s = shelves[i];
+            return ListTile(
+              leading: const Icon(Icons.shelves),
+              title: Text(s.name),
+              subtitle: Text(s.category ?? ''),
+              onTap: () => Navigator.pop(context, s),
+            );
+          },
+        ),
+      ),
     );
   }
 
-  Widget _buildStatCard({
-    required IconData icon,
-    required String value,
-    required String label,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.grey[200]!,
-        ),
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Scaffold(
+      body: _books.isEmpty ? _buildEmpty() : _buildList(),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openingScanner ? null : _openScanner,
+        backgroundColor: const Color(0xFF38ada9),
+        icon: _openingScanner
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2),
+              )
+            : const Icon(Icons.qr_code_scanner, color: Colors.white),
+        label: const Text('مسح رف',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
       ),
+    );
+  }
+
+  Widget _buildEmpty() {
+    return Center(
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            icon,
-            color: const Color(0xFF38ada9),
-            size: 28,
-          ),
-          const SizedBox(height: 8),
+          Icon(Icons.qr_code_scanner, size: 72, color: Colors.grey[300]),
+          const SizedBox(height: 16),
           Text(
-            value,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
+            'لم يتم مسح أي كتاب بعد',
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
               color: Colors.grey[600],
             ),
           ),
+          const SizedBox(height: 8),
+          Text(
+            'اضغط على "مسح رف" لبدء المسح',
+            style: TextStyle(fontSize: 13, color: Colors.grey[400]),
+          ),
+          const SizedBox(height: 80), // space for FAB
         ],
       ),
     );
   }
 
-  Widget _buildBookTile(dynamic book, int index) {
+  Widget _buildList() {
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFF38ada9),
+                  const Color(0xFF38ada9).withValues(alpha: 0.8),
+                ],
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'الكتب المسوحة',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_books.length} كتاب',
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_sweep_outlined,
+                      color: Colors.white70),
+                  tooltip: 'مسح السجل',
+                  onPressed: _clearHistory,
+                ),
+              ],
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) => _buildBookCard(_books[index]),
+              childCount: _books.length,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBookCard(Book book) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: const Color(0xFF38ada9),
-          child: Text(
-            '#${book.order ?? index + 1}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
-            ),
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: const Color(0xFF38ada9).withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
           ),
+          child: const Icon(Icons.book, color: Color(0xFF38ada9), size: 22),
         ),
-        title: Text(
-          book.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Text(
-              book.author,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'الرقم الدولي: ${book.isbn}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey[500],
-              ),
-            ),
-            if (book.scannedAt != null)
-              Text(
-                _formatDateTime(book.scannedAt),
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey[500],
-                ),
-              ),
-          ],
-        ),
-        trailing: PopupMenuButton(
-          itemBuilder: (context) => [
-            PopupMenuItem(
-              child: const Text('تفاصيل'),
-              onTap: () => _showBookDetails(book),
-            ),
-            PopupMenuItem(
-              child: const Text('حذف'),
-              onTap: () => _deleteBook(book),
-            ),
-          ],
+        title: Text(book.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text('${book.author} • ${book.isbn}',
+            maxLines: 1, overflow: TextOverflow.ellipsis),
+        trailing: IconButton(
+          icon: const Icon(Icons.delete_outline, color: Colors.red),
+          onPressed: () async {
+            await _firebase.deleteBook(book.isbn);
+            await _loadBooks();
+          },
         ),
       ),
     );
-  }
-
-  void _showBookDetails(dynamic book) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(book.title),
-        content: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _detailRow('المؤلف:', book.author),
-            _detailRow('الرقم الدولي:', book.isbn),
-            _detailRow('التصنيف:', book.category),
-            if (book.scannedAt != null)
-              _detailRow('تاريخ المسح:', _formatDateTime(book.scannedAt)),
-            _detailRow('الترتيب:', '#${book.order ?? ""}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('إغلاق'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _detailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-          Text(value),
-        ],
-      ),
-    );
-  }
-
-  void _deleteBook(dynamic book) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('حذف الكتاب'),
-        content: Text('هل أنت متأكد من حذف "${book.title}"؟'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('إلغاء'),
-          ),
-          TextButton(
-            onPressed: () {
-              widget.bookService.removeBook(book.isbn);
-              Navigator.pop(context);
-              setState(() {});
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('تم حذف الكتاب'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            },
-            child: const Text(
-              'حذف',
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showClearDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('مسح كل الكتب'),
-        content: const Text(
-          'هل أنت متأكد من حذف كل الكتب الممسوحة؟',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('إلغاء'),
-          ),
-          TextButton(
-            onPressed: () {
-              widget.bookService.clearAll();
-              Navigator.pop(context);
-              setState(() {});
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('تم حذف كل الكتب'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            },
-            child: const Text(
-              'حذف',
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 }

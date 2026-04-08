@@ -85,9 +85,7 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
     if (selectedWilaya == null || selectedWilaya == 'الكل') {
       return _libraries;
     }
-    return _libraries
-        .where((lib) => lib.city == selectedWilaya)
-        .toList();
+    return _libraries.where((lib) => lib.city == selectedWilaya).toList();
   }
 
   Future<void> _loadLibraries() async {
@@ -299,58 +297,78 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
                     child: Padding(
                       padding: EdgeInsets.all(32),
                       child: Center(
-                        child: CircularProgressIndicator(color: Color(0xFF38ada9)),
+                        child: CircularProgressIndicator(
+                          color: Color(0xFF38ada9),
+                        ),
                       ),
                     ),
                   )
                 : _error != null
-                    ? SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            children: [
-                              Icon(Icons.error_outline, size: 48, color: Colors.grey[600]),
-                              const SizedBox(height: 16),
-                              Text(
-                                'خطأ في التحميل',
-                                style: TextStyle(fontSize: 18, color: Colors.grey[800]),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                _error!,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton(
-                                onPressed: _loadLibraries,
-                                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF38ada9)),
-                                child: const Text('إعادة المحاولة', style: TextStyle(color: Colors.white)),
-                              ),
-                            ],
+                ? SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 48,
+                            color: Colors.grey[600],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'خطأ في التحميل',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey[800],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _error!,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[600],
+                            ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: _loadLibraries,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF38ada9),
+                            ),
+                            child: const Text(
+                              'إعادة المحاولة',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : libraries.isEmpty
+                ? SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Center(
+                        child: Text(
+                          'لا توجد مكتبات حالياً.',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[600],
                           ),
                         ),
-                      )
-                    : libraries.isEmpty
-                        ? SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.all(32),
-                              child: Center(
-                                child: Text(
-                                  'لا توجد مكتبات حالياً.',
-                                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                                ),
-                              ),
-                            ),
-                          )
-                        : SliverList(
-                            delegate: SliverChildBuilderDelegate((context, index) {
-                              final library = libraries[index];
-                              return _buildLibraryCard(context, library);
-                            }, childCount: libraries.length),
-                          ),
+                      ),
+                    ),
+                  )
+                : SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final library = libraries[index];
+                      return _buildLibraryCard(context, library);
+                    }, childCount: libraries.length),
+                  ),
           ),
 
           // Espacement en bas
@@ -440,7 +458,9 @@ class _LibrarySelectionScreenState extends State<LibrarySelectionScreen> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              library.floorCount == 1 ? 'طابق واحد' : '${library.floorCount} طوابق',
+                              library.floorCount == 1
+                                  ? 'طابق واحد'
+                                  : '${library.floorCount} طوابق',
                               style: TextStyle(
                                 fontSize: 13,
                                 color: Colors.grey[600],

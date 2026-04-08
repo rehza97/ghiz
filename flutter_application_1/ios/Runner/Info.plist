@@ -47,6 +47,10 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Cette application a besoin d'accéder à la caméra pour scanner les codes-barres des livres.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Cette application a besoin d'enregistrer les étiquettes codes-barres dans Photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Cette application a besoin d'accéder à Photos pour gérer les images des étiquettes.</string>
 	<key>ARKit</key>
 	<true/>
 </dict>
